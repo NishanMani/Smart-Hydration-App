@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h4>BioData Form</h4>
+        <center><h2>BIODATA FORM</h2> </center><br><hr><br>
         <div class="details">
             <table>
                 <form>
@@ -20,13 +21,30 @@
                         <td><input type="number" name="age" /></td>
                     </tr>
                     <tr>
-                        <td>GENDER:</td>
-                        <td><input type="radio" name="gender" />MALE</td>
-                        <td><input type="radio" name="gender" />FEMALE</td>
+                        <td>GENDER :</td>
+                        <td>
+                            <label><input type="radio" name="gender" />MALE</label>
+                            <label><input type="radio" name="gender" />FEMALE</label>
                     </tr>
+                    <tr>
+                        <td>DOB:</td>
+                        <td><input type="date" name="dob" ></td>
+                    </tr>
+                    <tr>
+                        <td>SKILLS :</td>
+                        <td>
+                            <label><input type="checkbox" name="skills" />JAVA</label>
+                            <label><input type="checkbox" name="skills" />PYTHON</label>
+                            <label><input type="checkbox" name="skills" />JAVASCRIPT</label>
+                            <label><input type="checkbox" name="skills" />MYSQL</label>
+                       </td>
+                    </tr>
+                    
                 </form>
             </table>
+            <button name="btn">SUBMIT</button>
         </div>
     </div>
+    <p>new changes</p>
 </body>
 </html>
