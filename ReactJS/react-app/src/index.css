@@ -1,0 +1,19 @@
+.card{
+  background-color: rgb(231, 231, 216);
+  border: 1px solid rgb(122, 117, 117);
+  border-radius: 5px;
+  font-family: sans-serif;
+  box-shadow: 2px 2px 12px #aaaaaa;
+  display: inline-block;
+  margin: 10px;
+  width: 200px;
+  
+}
+.card img{
+  width: 200px;
+  height: 200px;
+  border-radius: 5px 5px 0px 0px; 
+}
+h3,p{
+  text-align: center;
+}
