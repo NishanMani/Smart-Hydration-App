@@ -1,11 +1,5 @@
 import express from 'express';
-import {
-  createUser,
-  loginUser,
-  getUser,
-  updateUser,
-  deleteUser
-} from '../controllers/userController.js';
+import {createUser,loginUser,getUser,updateUser,deleteUser} from '../controllers/userController.js';
 
 import { refreshAccessToken } from "../controllers/authController.js";
 import {protect,adminOnly} from "../middlewares/authMiddleware.js";
@@ -24,6 +18,6 @@ router.post('/register', createUser);
 router.post('/login', loginUser);
 router.get('/:id',protect, getUser);
 router.put('/:id', updateUser);
-router.delete("/:id", protect, adminOnly, deleteUser);
+router.delete("/", protect, adminOnly, deleteUser);
 
 export default router;

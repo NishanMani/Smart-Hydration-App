@@ -27,12 +27,12 @@ export const refreshAccessToken = async (req, res) => {
   }
 };
 //Protected by only admin to delete
-export const adminOnly = (req, res, next) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({
-      message: "Access denied: Admins only",
-    });
-  }
-  next();
-};
+// export const adminOnly = (req, res, next) => {
+//   if (req.user.role !== "admin") {
+//     return res.status(403).json({
+//       message: "Access denied: Admins only",
+//     });
+//   }
+//   next();
+// };
 
