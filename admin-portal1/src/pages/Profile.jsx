@@ -1,4 +1,3 @@
-// src/pages/Profile.jsx
 import { useState, useContext } from "react";
 import { useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";

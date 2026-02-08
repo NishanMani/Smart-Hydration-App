@@ -1,4 +1,3 @@
-// src/components/Card.jsx
 import "../styles/common.css";
 
 const Card = ({ title, value }) => {

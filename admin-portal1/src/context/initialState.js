@@ -1,4 +1,3 @@
-// src/context/initialState.js
 export const initialAuthState = {
   user: null,
   isAuthenticated: false,

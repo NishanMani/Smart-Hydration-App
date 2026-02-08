@@ -1,4 +1,3 @@
-// src/components/Table.jsx
 import "../styles/common.css";
 
 const Table = ({ columns, data }) => {

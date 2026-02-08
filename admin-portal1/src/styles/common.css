@@ -135,21 +135,37 @@ select {
   align-items: center;
   gap: 15px;
 }
+.profile-icon {
+  width: 32px;        /* reduce size */
+  height: 32px;
+  border-radius: 50%; /* make it round */
+  object-fit: cover;  /* prevent image stretch */
+  cursor: pointer;
+  border: 2px solid #cbd5e1; /* optional */
 
-/* ===================== NAVBAR ===================== */
-.navbar {
-  background: #e5e7eb;
-  padding: 10px 20px;
-  display: flex;
-  gap: 20px;
+  /* FORCE dropdown text color in LIGHT theme */
+body:not(.dark) .dropdown-menu,
+body:not(.dark) .dropdown-menu * {
+  color: #1f2937 !important; /* 🔥 dark text */
 }
 
+}
+/* ===================== NAVBAR ===================== */
+.navbar {
+  width: 100%;
+  background: #e5e7eb;
+  padding: 10px 20px;
+
+  display: flex;
+  justify-content: flex-end; /* 🔥 moves navlinks to right */
+  gap: 20px;
+}
 body.dark .navbar {
   background: #020617;
 }
 
 .nav-link {
-  font-weight: 500;
+  font-weight: 800;
   color: #374151;
 }
 
@@ -163,6 +179,35 @@ body.dark .nav-link {
 }
 
 /* ===================== DROPDOWN ===================== */
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 45px;
+  background-color: #ffffff;   /* light background */
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  min-width: 150px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.dropdown-menu a,
+.dropdown-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  color: #222222;              /* ✅ visible text */
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dropdown-menu a:hover,
+.dropdown-menu button:hover {
+  background-color: #f2f2f2;
+}
 .dropdown {
   position: relative;
 }
@@ -193,6 +238,19 @@ body.dark .dropdown-menu {
 
 body.dark .dropdown-menu div:hover {
   background: #334155;
+}
+.light-theme .dropdown-menu a,
+.light-theme .dropdown-menu button {
+  color: #222;
+}
+
+.dark-theme .dropdown-menu {
+  background-color: #1f1f1f;
+}
+
+.dark-theme .dropdown-menu a,
+.dark-theme .dropdown-menu button {
+  color: #ffffff;
 }
 
 /* ===================== CARDS ===================== */
@@ -826,4 +884,82 @@ body.dark .badge.pending {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* ================= USERS & REPORTS RESPONSIVE ================= */
+
+/* Tablet & below */
+@media (max-width: 900px) {
+
+  /* Page padding */
+  .page {
+    padding: 16px;
+  }
+
+  .content {
+    padding: 16px;
+  }
+
+  /* Filters stack */
+  .filters {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .filters input,
+  .filters select {
+    width: 100%;
+  }
+
+  /* Table scroll */
+  .table,
+  .activity-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* Action buttons wrap */
+  .action-cell {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  button {
+    width: 100%;
+  }
+}
+
+/* Mobile only */
+@media (max-width: 600px) {
+
+  /* Page heading */
+  h2 {
+    font-size: 18px;
+  }
+
+  /* Summary cards (reports) */
+  .summary {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .summary-card h3 {
+    font-size: 20px;
+  }
+
+  /* Table text smaller */
+  .table th,
+  .table td,
+  .activity-table th,
+  .activity-table td {
+    font-size: 13px;
+    padding: 8px;
+  }
+
+  /* Filters buttons spacing */
+  .filters button {
+    margin-top: 6px;
+  }
 }

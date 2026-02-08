@@ -21,23 +21,10 @@ const Layout = () => {
 
       <Routes>
         <Route path="/login" element={<Login />} />
-
-        <Route
-          path="/"
-          element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/users"
-          element={isAuthenticated ? <Users /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/reports"
-          element={isAuthenticated ? <Reports /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/profile"
-          element={isAuthenticated ? <Profile /> : <Navigate to="/login" />}
-        />
+        <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />}/>
+        <Route path="/users" element={isAuthenticated ? <Users /> : <Navigate to="/login" />}/>
+        <Route path="/reports" element={isAuthenticated ? <Reports /> : <Navigate to="/login" />}/>
+        <Route path="/profile" element={isAuthenticated ? <Profile /> : <Navigate to="/login" />}/>
       </Routes>
     </>
   );

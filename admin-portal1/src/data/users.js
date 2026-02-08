@@ -1,27 +1,26 @@
-// src/data/users.js
 const users = [
   {
     id: 1,
-    name: "Admin User",
-    email: "admin@example.com",
+    name: "Girish",
+    email: "girish@gmail.com",
     role: "Admin",
   },
   {
     id: 2,
-    name: "Normal User",
-    email: "user@example.com",
+    name: "Nishan",
+    email: "nishan@gmail.com",
     role: "User",
   },
   {
     id: 3,
-    name: "John Doe",
-    email: "john@example.com",
+    name: "Jana",
+    email: "jana@gmail.com",
     role: "User",
   },
   {
     id: 4,
-    name: "Jane Smith",
-    email: "jane@example.com",
+    name: "Nayeem",
+    email: "nayeem@gmail.com",
     role: "Admin",
   },
 ];

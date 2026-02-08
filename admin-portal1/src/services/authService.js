@@ -1,19 +1,27 @@
-// src/services/authService.js
 export const fakeLogin = (email, password) => {
-  if (email === "admin@example.com" && password === "admin123") {
+  if (email === "girish@gmail.com" && password === "admin123") {
     return {
       id: 1,
-      name: "Admin User",
-      email: "admin@example.com",
+      name: "Girish",
+      email: "girish@gmail.com",
       role: "Admin",
+    };
+  }
+
+  if (email === "user@example.com" && password === "user123") {
+    return {
+      id: 2,
+      name: "Swaroop",
+      email: "swaroop@gmail.com",
+      role: "User",
     };
   }
 
   if (email === "1" && password === "1") {
     return {
-      id: 2,
-      name: "Normal User",
-      email: "user@example.com",
+      id: 3,
+      name: "Vijay",
+      email: "vijay@gmail.com",
       role: "User",
     };
   }

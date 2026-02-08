@@ -1,4 +1,3 @@
-// src/components/Modal.jsx
 import "../styles/common.css";
 
 const Modal = ({ isOpen, onClose, children }) => {

@@ -1,4 +1,3 @@
-// src/data/dashboard.js
 const dashboardData = {
   stats: [
     {
