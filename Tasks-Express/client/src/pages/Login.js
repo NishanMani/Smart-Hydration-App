@@ -8,60 +8,67 @@ function Login() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (!email || !password) {
-      setError("All fields are required");
-      return;
-    }
+  if (!email || !password) {
+    setError("All fields are required");
+    return;
+  }
 
-    try {
-      const res = await API.post("/users/login", {
-        email,
-        password,
-      });
+  try {
+    const res = await API.post("/users/login", {
+      email,
+      password,
+    });
 
-      localStorage.setItem("token", res.data.accessToken);
-      // navigate("/me");
+    const { accessToken, user } = res.data;
+
+    localStorage.setItem("token", accessToken);
+    localStorage.setItem("user", JSON.stringify(user)); //loc store cant store objects, so we convert to string
+
+    if (user.role === "user") {
+      navigate("/profile");
+    } else {
       navigate("/users");
-
-    } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
     }
-  };
+
+  } catch (err) {
+    setError(err.response?.data?.message || "Login failed");
+  }
+};
   const movetoRegister = () => {
       navigate("/register");
-    };
+  };
 
   return (
     <div className="auth-container">
-  <div className="auth-box">
-    <h2>Login</h2>
+        <div className="auth-box">
+          <h2>Login</h2>
 
-    {error && <p style={{ color: "red" }}>{error}</p>}
+          {error && <p style={{ color: "red" }}>{error}</p>}
 
-    <form onSubmit={handleSubmit}>
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
+          <form onSubmit={handleSubmit}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
 
-      <button type="submit">Login</button>
-    </form>
-  </div>
-  <button className="register-btn" onClick={movetoRegister} >Register</button>
+            <button type="submit">Login</button>
+          </form>
+        </div>
+        <button className="register-btn" onClick={movetoRegister} >Register</button>
 
-</div>
+    </div>
   );
 }
 
