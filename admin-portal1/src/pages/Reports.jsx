@@ -44,8 +44,6 @@ const Reports = () => {
           <h2>Reports</h2>
           <p className="subtitle">View and manage generated reports</p>
         </div>
-
-        {/* ===== FILTERS & EXPORT ===== */}
         <div className="filters">
           <select value={month} onChange={(e) => setMonth(e.target.value)}>
             <option value="">All Months</option>
@@ -76,7 +74,6 @@ const Reports = () => {
           </select>
         </div>
 
-        {/* ===== SUMMARY ===== */}
         <div className="summary">
           <div className="summary-card">
             <p>Total</p>
@@ -94,7 +91,6 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* ===== REPORTS TABLE ===== */}
         <Table columns={columns} data={filteredReports} />
       </div>
     </div>

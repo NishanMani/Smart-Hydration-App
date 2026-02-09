@@ -1,11 +1,9 @@
-/* ===================== RESET ===================== */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* ===================== CSS VARIABLES ===================== */
 :root {
   --primary: #1e6fd9;
   --primary-dark: #1558b0;
@@ -29,7 +27,6 @@
   --transition: 0.25s ease;
 }
 
-/* ===================== GLOBAL ===================== */
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background: var(--bg-light);
@@ -61,7 +58,6 @@ select {
   font-size: 14px;
 }
 
-/* ===================== LOGIN PAGE ===================== */
 .login-page {
   min-height: 100vh;
   display: flex;
@@ -113,7 +109,6 @@ select {
   transform: translateY(-2px);
 }
 
-/* ===================== HEADER ===================== */
 .header {
   height: 60px;
   background: var(--primary);
@@ -136,28 +131,26 @@ select {
   gap: 15px;
 }
 .profile-icon {
-  width: 32px;        /* reduce size */
+  width: 32px;       
   height: 32px;
-  border-radius: 50%; /* make it round */
-  object-fit: cover;  /* prevent image stretch */
+  border-radius: 50%; 
+  object-fit: cover; 
   cursor: pointer;
-  border: 2px solid #cbd5e1; /* optional */
+  border: 2px solid #cbd5e1;
 
-  /* FORCE dropdown text color in LIGHT theme */
 body:not(.dark) .dropdown-menu,
 body:not(.dark) .dropdown-menu * {
-  color: #1f2937 !important; /* 🔥 dark text */
+  color: #1f2937 !important; 
 }
 
 }
-/* ===================== NAVBAR ===================== */
 .navbar {
   width: 100%;
   background: #e5e7eb;
   padding: 10px 20px;
 
   display: flex;
-  justify-content: flex-end; /* 🔥 moves navlinks to right */
+  justify-content: flex-end; 
   gap: 20px;
 }
 body.dark .navbar {
@@ -178,12 +171,11 @@ body.dark .nav-link {
   border-bottom: 2px solid var(--primary);
 }
 
-/* ===================== DROPDOWN ===================== */
 .dropdown-menu {
   position: absolute;
   right: 0;
   top: 45px;
-  background-color: #ffffff;   /* light background */
+  background-color: #ffffff;  
   border: 1px solid #ddd;
   border-radius: 8px;
   min-width: 150px;
@@ -199,7 +191,7 @@ body.dark .nav-link {
   background: none;
   border: none;
   text-align: left;
-  color: #222222;              /* ✅ visible text */
+  color: #222222;            
   font-size: 14px;
   cursor: pointer;
 }
@@ -253,7 +245,6 @@ body.dark .dropdown-menu div:hover {
   color: #ffffff;
 }
 
-/* ===================== CARDS ===================== */
 .card {
   background: var(--bg-card-light);
   padding: 16px;
@@ -279,7 +270,6 @@ body.dark .card-title {
   font-weight: bold;
 }
 
-/* ===================== TABLE ===================== */
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -309,7 +299,6 @@ body.dark .table th {
   background: #020617;
 }
 
-/* ===================== BUTTONS ===================== */
 .btn {
   padding: 8px 14px;
   background: var(--primary);
@@ -324,7 +313,6 @@ body.dark .table th {
   background: #d32f2f;
 }
 
-/* ===================== PROFILE ===================== */
 .profile {
   min-height: 100vh;
   display: flex;
@@ -357,7 +345,6 @@ body.dark .profile .content h2 {
   color: #90caf9;
 }
 
-/* ===================== SUCCESS ===================== */
 .success {
   background: var(--success-bg);
   color: var(--success-text);
@@ -372,7 +359,6 @@ body.dark .profile .content h2 {
   content: "✔ ";
 }
 
-/* ===================== PROFILE FORM ===================== */
 .profile-form {
   display: flex;
   flex-direction: column;
@@ -412,14 +398,12 @@ body.dark .profile-form select {
   box-shadow: 0 8px 20px rgba(30,111,217,0.35);
 }
 
-/* ===================== UTILITIES ===================== */
 .text-center { text-align: center; }
 .mt-10 { margin-top: 10px; }
 .mt-20 { margin-top: 20px; }
 .mb-10 { margin-bottom: 10px; }
 .mb-20 { margin-bottom: 20px; }
 
-/* ===================== DASHBOARD LAYOUT ===================== */
 .dashboard {
   padding: 25px;
   min-height: 100vh;
@@ -430,7 +414,6 @@ body.dark .dashboard {
   background: var(--bg-dark);
 }
 
-/* ===================== WELCOME & LOGOUT ===================== */
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -460,7 +443,6 @@ body.dark .dashboard-header h2 {
   background: #b71c1c;
 }
 
-/* ===================== SUMMARY CARDS ===================== */
 .dashboard-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -504,7 +486,6 @@ body.dark .stat-title {
   color: var(--primary);
 }
 
-/* ===================== CHART SECTION ===================== */
 .dashboard-charts {
   display: grid;
   grid-template-columns: 1fr 1.5fr;
@@ -534,13 +515,11 @@ body.dark .chart-title {
   color: var(--text-dark);
 }
 
-/* Canvas placeholder style (Chart.js safe) */
 .chart-container {
   width: 100%;
   height: 280px;
 }
 
-/* ===================== RECENT ACTIVITIES ===================== */
 .activity-section {
   background: var(--bg-card-light);
   padding: 20px;
@@ -558,7 +537,6 @@ body.dark .activity-section {
   font-weight: 600;
 }
 
-/* ===================== ACTIVITY TABLE ===================== */
 .activity-table {
   width: 100%;
   border-collapse: collapse;
@@ -594,7 +572,6 @@ body.dark .activity-table tr:hover {
   background: #334155;
 }
 
-/* ===================== STATUS BADGES ===================== */
 .badge {
   padding: 4px 10px;
   border-radius: 20px;
@@ -618,21 +595,12 @@ body.dark .activity-table tr:hover {
   color: #1565c0;
 }
 
-/* ===================== RESPONSIVE ===================== */
 @media (max-width: 900px) {
   .dashboard-charts {
     grid-template-columns: 1fr;
   }
 }
-
 /* users */
-
-
-
-
-
-
-/* ================= PAGE BASE ================= */
 .page {
   min-height: 100vh;
   padding: 24px;
@@ -656,7 +624,6 @@ body.dark .content {
   color: #e5e7eb;
 }
 
-/* ================= HEADER ================= */
 h2 {
   margin-bottom: 16px;
   color: #1f2937;
@@ -666,7 +633,6 @@ body.dark h2 {
   color: #f1f5f9;
 }
 
-/* ================= FILTERS ================= */
 .filters {
   display: flex;
   gap: 12px;
@@ -693,7 +659,6 @@ body.dark .filters select {
   color: #64748b;
 }
 
-/* ================= TABLE ================= */
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -731,7 +696,6 @@ body.dark .table tr:hover {
   background-color: #334155;
 }
 
-/* ================= BUTTONS ================= */
 button {
   padding: 6px 12px;
   font-size: 13px;
@@ -758,13 +722,11 @@ button {
   opacity: 0.9;
 }
 
-/* ================= ACTION CELL ================= */
 .action-cell {
   display: flex;
   gap: 8px;
 }
 
-/* ================= RESPONSIVE ================= */
 @media (max-width: 768px) {
   .filters {
     flex-direction: column;
@@ -777,8 +739,6 @@ button {
 
 /* reports */
 
-
-/* ================= REPORT SUMMARY ================= */
 .summary {
   display: flex;
   gap: 16px;
@@ -821,7 +781,6 @@ body.dark .summary-card h3 {
   border-left: 4px solid #f59e0b;
 }
 
-/* ================= STATUS BADGES ================= */
 .badge {
   padding: 4px 10px;
   font-size: 12px;
@@ -849,7 +808,6 @@ body.dark .badge.pending {
   color: #fde68a;
 }
 
-/* ================= RESPONSIVE ================= */
 @media (max-width: 768px) {
   .summary {
     flex-direction: column;
@@ -857,9 +815,6 @@ body.dark .badge.pending {
 }
 
 /* logo */
-
-
-
 
 .header {
   display: flex;
@@ -886,12 +841,9 @@ body.dark .badge.pending {
   gap: 12px;
 }
 
-/* ================= USERS & REPORTS RESPONSIVE ================= */
 
-/* Tablet & below */
 @media (max-width: 900px) {
 
-  /* Page padding */
   .page {
     padding: 16px;
   }
@@ -900,7 +852,6 @@ body.dark .badge.pending {
     padding: 16px;
   }
 
-  /* Filters stack */
   .filters {
     flex-direction: column;
     gap: 10px;
@@ -911,7 +862,6 @@ body.dark .badge.pending {
     width: 100%;
   }
 
-  /* Table scroll */
   .table,
   .activity-table {
     display: block;
@@ -920,7 +870,6 @@ body.dark .badge.pending {
     white-space: nowrap;
   }
 
-  /* Action buttons wrap */
   .action-cell {
     flex-wrap: wrap;
     gap: 6px;
@@ -931,15 +880,12 @@ body.dark .badge.pending {
   }
 }
 
-/* Mobile only */
 @media (max-width: 600px) {
 
-  /* Page heading */
   h2 {
     font-size: 18px;
   }
 
-  /* Summary cards (reports) */
   .summary {
     flex-direction: column;
     gap: 12px;
@@ -949,7 +895,6 @@ body.dark .badge.pending {
     font-size: 20px;
   }
 
-  /* Table text smaller */
   .table th,
   .table td,
   .activity-table th,
@@ -958,7 +903,6 @@ body.dark .badge.pending {
     padding: 8px;
   }
 
-  /* Filters buttons spacing */
   .filters button {
     margin-top: 6px;
   }
