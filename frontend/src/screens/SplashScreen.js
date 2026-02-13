@@ -2,14 +2,21 @@ import { View, Text, StyleSheet, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
+import { getToken } from "../services/storageService";
 
 export default function SplashScreen() {
   const navigation = useNavigation();
 
   useEffect(() => {
-    setTimeout(() => {
-      navigation.replace("Auth");
-    }, 3000);
+    const bootstrap = async () => {
+      const token = await getToken();
+
+      setTimeout(() => {
+        navigation.replace(token ? "Dashboard" : "Auth");
+      }, 2000);
+    };
+
+    bootstrap();
   }, []);
 
   return (

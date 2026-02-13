@@ -4,7 +4,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch
+  Switch,
+  Alert,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,6 +14,7 @@ import { useState, useEffect  } from "react";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getReminder, setReminder } from "../api/reminderApi";
 
 
 export default function ReminderScreen() {
@@ -20,7 +22,7 @@ export default function ReminderScreen() {
   const navigation = useNavigation();
 
   const [enabled, setEnabled] = useState(true);
-  const [interval, setInterval] = useState("30 minutes");
+  const [interval, setReminderInterval] = useState("30 minutes");
 
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
@@ -45,6 +47,13 @@ export default function ReminderScreen() {
   "2 hours": 120,
   "3 hours": 180
 };
+  const intervalLabelFromMinutes = {
+    30: "30 minutes",
+    60: "1 hour",
+    90: "1.5 hours",
+    120: "2 hours",
+    180: "3 hours",
+  };
 
   const onChangeStart = (event, selectedDate) => {
     setShowStart(false);
@@ -62,6 +71,17 @@ export default function ReminderScreen() {
       minute: "2-digit",
     });
   };
+  const toHHmm = (date) => {
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
+  const fromHHmm = (value) => {
+    const [h, m] = String(value || "08:00").split(":").map(Number);
+    const date = new Date();
+    date.setHours(Number.isFinite(h) ? h : 8, Number.isFinite(m) ? m : 0, 0, 0);
+    return date;
+  };
   const generateReminders = () => {
 
   const reminders = [];
@@ -70,10 +90,24 @@ export default function ReminderScreen() {
   const end = new Date(endTime);
 
   const intervalMinutes = intervalMap[interval];
+  if (!intervalMinutes || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return reminders;
+  }
 
-  let current = new Date(start);
+  // Keep schedule generation bounded to avoid UI freeze/ANR.
+  const normalizedStart = new Date(start);
+  const normalizedEnd = new Date(end);
+  normalizedStart.setSeconds(0, 0);
+  normalizedEnd.setSeconds(0, 0);
+  if (normalizedEnd < normalizedStart) {
+    normalizedEnd.setDate(normalizedEnd.getDate() + 1);
+  }
 
-  while (current <= end) {
+  let current = new Date(normalizedStart);
+  let safetyCounter = 0;
+  const maxReminders = 96; // Up to 48 hours at 30-minute intervals.
+
+  while (current <= normalizedEnd && safetyCounter < maxReminders) {
 
     reminders.push(formatTime(current));
 
@@ -81,6 +115,7 @@ export default function ReminderScreen() {
       current.getTime() +
       intervalMinutes * 60000
     );
+    safetyCounter += 1;
   }
 
   return reminders;
@@ -96,12 +131,16 @@ export default function ReminderScreen() {
       endTime,
     };
 
-    await AsyncStorage.setItem(
-      "reminderSettings",
-      JSON.stringify(reminderData)
-    );
+    await AsyncStorage.setItem("reminderSettings", JSON.stringify(reminderData));
 
-    alert("Reminder settings saved ✅");
+    await setReminder({
+      interval: intervalMap[interval],
+      startTime: toHHmm(startTime),
+      endTime: toHHmm(endTime),
+      activityLevel: "Moderate",
+    }).catch(() => null);
+
+    Alert.alert("Saved", "Reminder settings saved");
 
   } catch (error) {
     console.log(error);
@@ -110,6 +149,18 @@ export default function ReminderScreen() {
 
 const loadSettings = async () => {
   try {
+    const res = await getReminder().catch(() => null);
+    const serverReminder = res?.data;
+
+    if (serverReminder) {
+      setEnabled(Boolean(serverReminder.isActive) && !Boolean(serverReminder.sleepMode));
+      setReminderInterval(
+        intervalLabelFromMinutes[Number(serverReminder.interval)] || "30 minutes"
+      );
+      setStartTime(fromHHmm(serverReminder.startTime));
+      setEndTime(fromHHmm(serverReminder.endTime));
+      return;
+    }
 
     const data = await AsyncStorage.getItem("reminderSettings");
 
@@ -118,7 +169,7 @@ const loadSettings = async () => {
     const parsed = JSON.parse(data);
 
     setEnabled(parsed.enabled);
-    setInterval(parsed.interval);
+    setReminderInterval(parsed.interval || "30 minutes");
     setStartTime(new Date(parsed.startTime));
     setEndTime(new Date(parsed.endTime));
 
@@ -195,7 +246,7 @@ const reminderTimes = generateReminders();
                 styles.intervalBtn,
                 interval === item && styles.intervalActive
               ]}
-              onPress={() => setInterval(item)}
+              onPress={() => setReminderInterval(item)}
             >
               <Text
                 style={[

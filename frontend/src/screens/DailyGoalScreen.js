@@ -3,7 +3,8 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity
+  TouchableOpacity,
+  Alert,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getUserProfile, updateUserProfile } from "../api/userApi";
 
 export default function DailyGoalScreen() {
 
@@ -25,6 +27,13 @@ export default function DailyGoalScreen() {
 
   const loadGoal = async () => {
     try {
+      const res = await getUserProfile().catch(() => null);
+      const serverGoal = Number(res?.data?.dailyGoal || 0);
+      if (serverGoal > 0) {
+        setGoal(String(serverGoal));
+        return;
+      }
+
       const data = await AsyncStorage.getItem("hydrationData");
 
       if (!data) return;
@@ -41,6 +50,11 @@ export default function DailyGoalScreen() {
   // Save Goal
   const saveGoal = async () => {
     try {
+      const parsedGoal = Number(goal);
+      if (!Number.isFinite(parsedGoal) || parsedGoal <= 0) {
+        Alert.alert("Invalid Goal", "Please enter a valid daily goal in ml.");
+        return;
+      }
 
       const data = await AsyncStorage.getItem("hydrationData");
 
@@ -48,8 +62,10 @@ export default function DailyGoalScreen() {
 
       const updatedData = {
         ...parsed,
-        goal: Number(goal),
+        goal: parsedGoal,
       };
+
+      await updateUserProfile({ dailyGoal: String(parsedGoal) }).catch(() => null);
 
       await AsyncStorage.setItem(
         "hydrationData",

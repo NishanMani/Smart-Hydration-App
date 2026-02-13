@@ -3,16 +3,85 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity
+  TouchableOpacity,
+  Alert,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { removeToken } from "../services/storageService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback, useState } from "react";
+import { getUserProfile } from "../api/userApi";
 
 export default function SettingsScreen() {
 
   const navigation = useNavigation();
+  const [profileName, setProfileName] = useState("User");
+  const [profileEmail, setProfileEmail] = useState("No email");
+  const [dailyGoal, setDailyGoal] = useState(2772);
+
+  const loadSettingsData = async () => {
+    try {
+      const [profileRes, profileData, hydrationData] = await Promise.all([
+        getUserProfile().catch(() => null),
+        AsyncStorage.getItem("userProfile"),
+        AsyncStorage.getItem("hydrationData"),
+      ]);
+
+      const serverProfile = profileRes?.data;
+
+      if (serverProfile) {
+        setProfileName(serverProfile?.name?.trim() || "User");
+        setProfileEmail(serverProfile?.email?.trim() || "No email");
+        const serverGoal = Number(serverProfile?.dailyGoal || 0);
+        if (serverGoal > 0) setDailyGoal(serverGoal);
+      }
+
+      if (!serverProfile && profileData) {
+        const parsedProfile = JSON.parse(profileData);
+        setProfileName(parsedProfile?.name?.trim() || "User");
+        setProfileEmail(parsedProfile?.email?.trim() || "No email");
+      } else if (!serverProfile) {
+        setProfileName("User");
+        setProfileEmail("No email");
+      }
+
+      if (hydrationData && !serverProfile?.dailyGoal) {
+        const parsedHydration = JSON.parse(hydrationData);
+        setDailyGoal(Number(parsedHydration?.goal || 2772));
+      } else if (!serverProfile?.dailyGoal) {
+        setDailyGoal(2772);
+      }
+    } catch (e) {
+      console.log("Settings load error", e);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSettingsData();
+    }, [])
+  );
+
+  const handleLogout = () => {
+    Alert.alert("Logout", "Do you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await removeToken();
+            navigation.replace("Auth");
+          } catch (e) {
+            Alert.alert("Error", "Unable to logout. Try again.");
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -45,17 +114,17 @@ export default function SettingsScreen() {
 
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              G
+              {profileName?.charAt(0)?.toUpperCase() || "U"}
             </Text>
           </View>
 
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>
-              Girish
+              {profileName}
             </Text>
 
             <Text style={styles.email}>
-              girish@gmail.com
+              {profileEmail}
             </Text>
           </View>
 
@@ -109,7 +178,7 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={styles.menuCard}
           onPress={() =>
-            navigation.navigate("Reminder")
+            navigation.navigate("Reminders")
           }
         >
 
@@ -175,7 +244,7 @@ export default function SettingsScreen() {
                 Daily Goal
               </Text>
               <Text style={styles.menuSub}>
-                Currently: 2772 ml
+                Currently: {dailyGoal} ml
               </Text>
             </View>
 
@@ -190,7 +259,10 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* LOGOUT */}
-        <TouchableOpacity style={styles.logoutBtn}>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={handleLogout}
+        >
 
           <Ionicons
             name="log-out-outline"

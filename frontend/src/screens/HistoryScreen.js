@@ -3,50 +3,75 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity
+  TouchableOpacity,
+  Alert,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import * as Print from "expo-print";
-import * as Sharing from "expo-sharing";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 
 export default function HistoryScreen() {
 
   const navigation = useNavigation();
 
   const [logs, setLogs] = useState([]);
+  const goal = 2772;
+  const MAX_HISTORY_ITEMS = 600;
 
-  useEffect(() => {
-    loadHistory();
+  const sanitizeLogs = useCallback((items) => {
+    if (!Array.isArray(items)) return [];
+
+    return items
+      .filter((log) => log && typeof log === "object")
+      .map((log) => ({
+        date: log.date || "Today",
+        time: log.time || "--:--",
+        amount: Number(log.amount || 0),
+      }))
+      .filter((log) => Number.isFinite(log.amount) && log.amount >= 0)
+      .slice(-MAX_HISTORY_ITEMS);
   }, []);
 
   /* LOAD HISTORY */
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     try {
 
       const data = await AsyncStorage.getItem(
         "hydrationData"
       );
 
-      if (!data) return;
+      if (!data) {
+        setLogs([]);
+        return;
+      }
 
       const parsed = JSON.parse(data);
+      const parsedLogs = sanitizeLogs(parsed?.logs);
 
-      setLogs(parsed.logs || []);
+      setLogs(parsedLogs);
 
     } catch (e) {
       console.log(e);
     }
-  };
+  }, [sanitizeLogs]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadHistory();
+    }, [loadHistory])
+  );
 
   /* DELETE LOG */
 
-  const deleteLog = async (index) => {
+  const deleteLog = useCallback(async (index) => {
     try {
 
       const data = await AsyncStorage.getItem(
@@ -56,16 +81,25 @@ export default function HistoryScreen() {
       if (!data) return;
 
       const parsed = JSON.parse(data);
+      const existingLogs = sanitizeLogs(parsed?.logs);
 
-      const updatedLogs = parsed.logs.filter(
+      if (index < 0 || index >= existingLogs.length) {
+        return;
+      }
+
+      const deletedLog = existingLogs[index];
+
+      const updatedLogs = existingLogs.filter(
         (_, i) => i !== index
       );
 
-      const deletedAmount =
-        parsed.logs[index].amount;
-
-      const updatedIntake =
-        parsed.intake - deletedAmount;
+      const today = new Date().toDateString();
+      const parsedIntake = Number(parsed.intake || 0);
+      const deletedAmount = Number(deletedLog?.amount || 0);
+      const isTodayLog = (deletedLog?.date || today) === today;
+      const updatedIntake = isTodayLog
+        ? Math.max(parsedIntake - deletedAmount, 0)
+        : parsedIntake;
 
       const updatedData = {
         ...parsed,
@@ -78,12 +112,12 @@ export default function HistoryScreen() {
         JSON.stringify(updatedData)
       );
 
-      setLogs(updatedLogs);
+      setLogs(sanitizeLogs(updatedLogs));
 
     } catch (e) {
       console.log(e);
     }
-  };
+  }, [sanitizeLogs]);
 
   /* GROUP BY DATE */
 
@@ -106,11 +140,9 @@ export default function HistoryScreen() {
     return grouped;
   };
 
-  const groupedLogs = groupByDate();
+  const groupedLogs = useMemo(() => groupByDate(), [logs]);
 
   // WEEKLY PERFORMANCE
-
-const goal = 2772;
 
 const calculateWeeklyPerformance = () => {
 
@@ -126,7 +158,7 @@ const calculateWeeklyPerformance = () => {
   const last7 = logs.slice(-7);
 
   const total = last7.reduce(
-    (sum, item) => sum + item.amount,
+    (sum, item) => sum + Number(item.amount || 0),
     0
   );
 
@@ -176,11 +208,11 @@ const calculateMonthlyComparison = () => {
       logDate.getMonth();
 
     if (logMonth === currentMonth) {
-      thisMonthTotal += log.amount;
+      thisMonthTotal += Number(log.amount || 0);
     }
 
     if (logMonth === lastMonth) {
-      lastMonthTotal += log.amount;
+      lastMonthTotal += Number(log.amount || 0);
     }
 
   });
@@ -211,49 +243,23 @@ const calculateStreak = () => {
 
   if (!logs.length) return 0;
 
-  const goal = 2772;
-
-  const sortedLogs = [...logs].sort(
-    (a, b) =>
-      new Date(b.date) -
-      new Date(a.date)
-  );
+  const totalsByDate = logs.reduce((acc, log) => {
+    const dateKey = log.date || new Date().toDateString();
+    acc[dateKey] = (acc[dateKey] || 0) + Number(log.amount || 0);
+    return acc;
+  }, {});
 
   let streak = 0;
-  let currentDate = new Date();
+  const currentDate = new Date();
+  currentDate.setHours(0, 0, 0, 0);
 
-  for (let i = 0; i < sortedLogs.length; i++) {
+  while (true) {
+    const day = new Date(currentDate);
+    day.setDate(day.getDate() - streak);
+    const dayKey = day.toDateString();
 
-    const logDate = new Date(
-      sortedLogs[i].date
-    );
-
-    const diff =
-      Math.floor(
-        (currentDate - logDate) /
-        (1000 * 60 * 60 * 24)
-      );
-
-    if (diff === streak) {
-
-      const dayTotal = logs
-        .filter(
-          (l) =>
-            l.date ===
-            sortedLogs[i].date
-        )
-        .reduce(
-          (sum, l) =>
-            sum + l.amount,
-          0
-        );
-
-      if (dayTotal >= goal) {
-        streak++;
-      } else {
-        break;
-      }
-
+    if ((totalsByDate[dayKey] || 0) >= goal) {
+      streak += 1;
     } else {
       break;
     }
@@ -302,7 +308,7 @@ const exportPDF = async () => {
         totals[log.date] = 0;
       }
 
-      totals[log.date] += log.amount;
+      totals[log.date] += Number(log.amount || 0);
 
     });
 
@@ -356,10 +362,22 @@ const exportPDF = async () => {
       </html>
     `;
 
+    const Print = await import("expo-print");
+    const Sharing = await import("expo-sharing");
+
     const { uri } =
       await Print.printToFileAsync({
         html,
       });
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      Alert.alert(
+        "Exported",
+        "PDF created but sharing is not available on this device."
+      );
+      return;
+    }
 
     await Sharing.shareAsync(uri);
 
@@ -602,12 +620,7 @@ const exportPDF = async () => {
 
             {groupedLogs[date].map((item, index) => {
 
-              const globalIndex = logs.findIndex(
-                (l) =>
-                  l.time === item.time &&
-                  l.amount === item.amount &&
-                  (l.date || "Today") === date
-              );
+              const globalIndex = logs.indexOf(item);
 
               return (
 
@@ -631,7 +644,18 @@ const exportPDF = async () => {
                     size={18}
                     color="#ef4444"
                     onPress={() =>
-                      deleteLog(globalIndex)
+                      Alert.alert(
+                        "Delete Log",
+                        "Are you sure you want to delete this entry?",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => deleteLog(globalIndex),
+                          },
+                        ]
+                      )
                     }
                   />
 

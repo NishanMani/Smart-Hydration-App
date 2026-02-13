@@ -11,17 +11,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { registerUser, loginUser }
-from "../api/authApi";
-
-import { saveToken }
-from "../services/storageService";
+import { registerUser, loginUser } from "../api/authApi";
+import { saveToken } from "../services/storageService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function AuthScreen() {
   const [activeTab, setActiveTab] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigation = useNavigation();
 
@@ -29,80 +28,116 @@ export default function AuthScreen() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   };
 
-  const handleSubmit = () => {
+  const validateForm = () => {
     if (activeTab === "register" && name.trim() === "") {
       Alert.alert("Error", "Name is required");
-      return;
+      return false;
     }
 
     if (email.trim() === "") {
       Alert.alert("Error", "Email is required");
-      return;
+      return false;
     }
 
     if (!validateEmail(email)) {
       Alert.alert("Error", "Enter valid email");
-      return;
+      return false;
     }
 
     if (password.trim() === "") {
       Alert.alert("Error", "Password is required");
-      return;
+      return false;
     }
 
     if (activeTab === "register" && password.length < 6) {
-      Alert.alert(
-        "Error",
-        "Password must be at least 6 characters"
-      );
-      return;
+      Alert.alert("Error", "Password must be at least 6 characters");
+      return false;
     }
 
-   navigation.replace("Onboarding");
+    return true;
   };
- const handleAuth = async () => {
-  try {
 
-    if (activeTab === "register") {
+  const handleAuth = async () => {
+    if (!validateForm() || isSubmitting) return;
 
-      await registerUser({
-        name,
-        email,
-        password,
-      });
+    const payload = {
+      email: email.trim().toLowerCase(),
+      password: password.trim(),
+    };
 
-      Alert.alert("Success", "Registered successfully");
+    setIsSubmitting(true);
 
-    } else {
+    try {
+      if (activeTab === "register") {
+        await registerUser({
+          name: name.trim(),
+          ...payload,
+        });
 
-      const res = await loginUser({
-        email,
-        password,
-      });
+        Alert.alert("Success", "Registered successfully. Please log in.");
+        setActiveTab("login");
+        setPassword("");
+      } else {
+        const res = await loginUser(payload);
+        const token = res?.data?.accessToken;
+        const user = res?.data?.user;
 
-      console.log("LOGIN RESPONSE →", res.data);
+        if (!token) {
+          Alert.alert("Error", "Token not received");
+          return;
+        }
 
-      const token = res.data.accessToken;
+        await saveToken(token);
 
-      if (!token) {
-        Alert.alert("Error", "Token not received");
-        return;
+        const currentUserId = user?.id ? String(user.id) : null;
+        const previousUserId = await AsyncStorage.getItem("currentUserId");
+
+        if (
+          currentUserId &&
+          (!previousUserId || previousUserId !== currentUserId)
+        ) {
+          await AsyncStorage.multiRemove([
+            "hydrationData",
+            "userProfile",
+            "reminderSettings",
+          ]);
+        }
+
+        if (currentUserId) {
+          await AsyncStorage.setItem("currentUserId", currentUserId);
+        }
+
+        if (user?.name || user?.email) {
+          await AsyncStorage.setItem(
+            "userProfile",
+            JSON.stringify({
+              name: user?.name || "",
+              email: user?.email || "",
+            })
+          );
+        }
+
+        const onboardingKey = currentUserId
+          ? `onboardingCompleted:${currentUserId}`
+          : "onboardingCompleted";
+        const onboardingDone = await AsyncStorage.getItem(onboardingKey);
+        const hasGoalFromServer = Number(user?.dailyGoal || 0) > 0;
+
+        if (hasGoalFromServer) {
+          await AsyncStorage.setItem(onboardingKey, "true");
+          navigation.replace("Dashboard");
+        } else if (!onboardingDone) {
+          navigation.replace("Onboarding");
+        } else {
+          navigation.replace("Dashboard");
+        }
       }
-
-      await saveToken(token);
-
-      navigation.replace("Dashboard");
+    } catch (e) {
+      Alert.alert("Auth Error", e.response?.data?.message || "Something went wrong");
+    } finally {
+      setIsSubmitting(false);
     }
-
-  } catch (e) {
-    console.log("LOGIN ERROR →", e.response?.data);
-
-    Alert.alert(
-      "Auth Error",
-      e.response?.data?.message || "Something went wrong"
-    );
-  }
-};
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -198,9 +233,11 @@ export default function AuthScreen() {
   onPress={handleAuth}
 >
               <Text style={styles.loginText}>
-                {activeTab === "login"
-                  ? "Login"
-                  : "Create Account"}
+                {isSubmitting
+                  ? "Please wait..."
+                  : activeTab === "login"
+                    ? "Login"
+                    : "Create Account"}
               </Text>
             </TouchableOpacity>
           </View>

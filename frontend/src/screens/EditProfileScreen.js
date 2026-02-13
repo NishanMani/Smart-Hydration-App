@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getUserProfile, updateUserProfile } from "../api/userApi";
 
 export default function EditProfileScreen() {
 
@@ -34,6 +35,17 @@ export default function EditProfileScreen() {
 
   const loadProfile = async () => {
     try {
+      const res = await getUserProfile().catch(() => null);
+      const user = res?.data;
+
+      if (user) {
+        setName(user.name || "");
+        setEmail(user.email || "");
+        setWeight(user.weight ? String(user.weight) : "");
+        setHeight(user.height ? String(user.height) : "");
+        setAge(user.age ? String(user.age) : "");
+        return;
+      }
 
       const data = await AsyncStorage.getItem("userProfile");
 
@@ -64,12 +76,14 @@ export default function EditProfileScreen() {
     try {
 
       const profile = {
-        name,
-        email,
-        weight,
-        height,
-        age
+        name: name.trim(),
+        email: email.trim(),
+        weight: weight ? Number(weight) : undefined,
+        height: height ? Number(height) : undefined,
+        age: age ? Number(age) : undefined,
       };
+
+      await updateUserProfile(profile).catch(() => null);
 
       await AsyncStorage.setItem(
         "userProfile",

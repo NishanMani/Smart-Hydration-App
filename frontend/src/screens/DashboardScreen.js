@@ -16,6 +16,12 @@ import { useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
+import { getUserProfile } from "../api/userApi";
+import {
+  addWaterLog as addWaterLogApi,
+  deleteWaterLog as deleteWaterLogApi,
+  getDailySummary,
+} from "../api/waterApi";
 
 
 export default function DashboardScreen() {
@@ -35,7 +41,8 @@ export default function DashboardScreen() {
 
  
 
-  const fill = (intake / goal) * 100;
+  const safeGoal = Number(goal) > 0 ? Number(goal) : 1;
+  const fill = Math.min((intake / safeGoal) * 100, 100);
 
   //useEffect
   useEffect(() => {
@@ -45,38 +52,27 @@ export default function DashboardScreen() {
 const saveData = async () => {
 
   try {
-
-    const existing =
-      await AsyncStorage.getItem(
-        "hydrationData"
-      );
-
-    let parsed = existing
-      ? JSON.parse(existing)
-      : { logs: [] };
+    const existing = await AsyncStorage.getItem("hydrationData");
+    const parsed = existing ? JSON.parse(existing) : { logs: [] };
 
     const today = new Date().toDateString();
+    const oldLogs = parsed.logs || [];
+    const filtered = oldLogs.filter((log) => log.date !== today);
+    const todaysLogs = logs.map((log) => ({
+      ...log,
+      date: today,
+    }));
+    const updatedLogs = [...filtered, ...todaysLogs];
 
-    // Remove today's old logs
-    const filtered =
-      parsed.logs.filter(
-        (log) => log.date !== today
-      );
-
-    // Add updated logs
-    const updatedLogs = [
-      ...filtered,
-      ...logs,
-    ];
-
-    await AsyncStorage.setItem(
-      "hydrationData",
-      JSON.stringify({
-        ...parsed,
-        goal,
-        logs: updatedLogs,
-      })
-    );
+    await AsyncStorage.setItem("hydrationData", JSON.stringify({
+      ...parsed,
+      date: today,
+      goal,
+      intake,
+      streak,
+      lastCompletedDate,
+      logs: updatedLogs,
+    }));
 
   } catch (e) {
     console.log("Save error", e);
@@ -85,33 +81,29 @@ const saveData = async () => {
 };
 
 useEffect(() => {
-  loadData();
+  loadHydrationData();
 }, []);
 
 const loadData = async () => {
   try {
-    const data = await AsyncStorage.getItem(
-      "hydrationData"
-    );
+    const data = await AsyncStorage.getItem("hydrationData");
 
     if (!data) return;
 
     const parsed = JSON.parse(data);
-
     const today = new Date().toDateString();
+    const allLogs = parsed.logs || [];
+    const todaysLogs = allLogs.filter((log) => log.date === today);
+    const parsedGoal = Number(parsed.goal || 2772);
+    const safeParsedGoal = parsedGoal > 0 ? parsedGoal : 2772;
+    const todaysIntake = todaysLogs.reduce((sum, log) => sum + Number(log.amount || 0), 0);
+    const cappedIntake = Math.min(todaysIntake, safeParsedGoal);
 
-    if (parsed.date === today) {
-      setIntake(parsed.intake);
-      setLogs(parsed.logs);
-      setStreak(parsed.streak || 0);
-      setLastCompletedDate(
-        parsed.lastCompletedDate
-      );
-
-    } else {
-      setIntake(0);
-      setLogs([]);
-    }
+    setGoal(safeParsedGoal);
+    setStreak(parsed.streak || 0);
+    setLastCompletedDate(parsed.lastCompletedDate || null);
+    setLogs(todaysLogs);
+    setIntake(cappedIntake);
 
   } catch (e) {
     console.log("Load error", e);
@@ -134,9 +126,20 @@ const checkStreak = () => {
 };
 
   // ✅ Add Water Logic
-  const addWater = (amount) => {
+  const addWater = async (amount) => {
+  const value = Number(amount || 0);
+  if (value <= 0) return;
+
+  try {
+    await addWaterLogApi(value);
+    await loadHydrationData();
+    return;
+  } catch (e) {
+    console.log(e);
+  }
+
   setIntake((prev) =>
-    Math.min(prev + amount, goal)
+    Math.min(prev + value, goal)
   );
 
   const time = new Date().toLocaleTimeString([], {
@@ -146,30 +149,38 @@ const checkStreak = () => {
 
   setLogs((prev) => [
     ...prev,
-    { amount, time },
+    { amount: value, time, date: new Date().toDateString() },
   ]);
 };
 
 //addcustomwater
 
-  const addCustomWater = () => {
+  const addCustomWater = async () => {
   if (!customAmount) return;
 
-  const amount = parseInt(customAmount);
+  const amount = parseInt(customAmount, 10);
+  if (Number.isNaN(amount) || amount <= 0) return;
 
-  setIntake((prev) =>
-    Math.min(prev + amount, goal)
-  );
+  try {
+    await addWaterLogApi(amount);
+    await loadHydrationData();
+  } catch (e) {
+    console.log(e);
 
-  const time = new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    setIntake((prev) =>
+      Math.min(prev + amount, goal)
+    );
 
-  setLogs((prev) => [
-    ...prev,
-    { amount, time },
-  ]);
+    const time = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    setLogs((prev) => [
+      ...prev,
+      { amount, time, date: new Date().toDateString() },
+    ]);
+  }
 
   setCustomAmount("");
   setModalVisible(false);
@@ -177,7 +188,17 @@ const checkStreak = () => {
 
 //deletelog
 
-const deleteLog = (index, amount) => {
+const deleteLog = async (index, amount, id) => {
+  if (id) {
+    try {
+      await deleteWaterLogApi(id);
+      await loadHydrationData();
+      return;
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
   setLogs((prev) =>
     prev.filter((_, i) => i !== index)
   );
@@ -190,18 +211,53 @@ const deleteLog = (index, amount) => {
 const loadHydrationData = async () => {
 
   try {
+    const summaryRes = await getDailySummary().catch(() => null);
+    const summary = summaryRes?.data;
 
-    const data =
-      await AsyncStorage.getItem(
-        "hydrationData"
-      );
+    if (summary?.success) {
+      const apiLogs = Array.isArray(summary.logs)
+        ? summary.logs.map((log) => ({
+            id: log._id,
+            amount: Number(log.amount || 0),
+            time: new Date(log.date).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            date: new Date(log.date).toDateString(),
+          }))
+        : [];
+
+      const [profileRes, local] = await Promise.all([
+        getUserProfile().catch(() => null),
+        AsyncStorage.getItem("hydrationData"),
+      ]);
+      const localParsed = local ? JSON.parse(local) : {};
+      const serverGoal = Number(profileRes?.data?.dailyGoal || 0);
+      const localGoal = Number(localParsed.goal || 2772);
+      const selectedGoal = serverGoal > 0 ? serverGoal : localGoal;
+      const safeParsedGoal = selectedGoal > 0 ? selectedGoal : 2772;
+
+      setIntake(Math.min(Number(summary.totalIntake || 0), safeParsedGoal));
+      setGoal(safeParsedGoal);
+      setLogs(apiLogs);
+      return;
+    }
+
+    const data = await AsyncStorage.getItem("hydrationData");
 
     if (!data) return;
 
     const parsed = JSON.parse(data);
+    const today = new Date().toDateString();
+    const todayLogs = (parsed.logs || []).filter((log) => log.date === today);
+    const parsedGoal = Number(parsed.goal || 2772);
+    const safeParsedGoal = parsedGoal > 0 ? parsedGoal : 2772;
+    const todayIntake = todayLogs.reduce((sum, log) => sum + Number(log.amount || 0), 0);
+    const cappedIntake = Math.min(todayIntake, safeParsedGoal);
 
-    setIntake(parsed.intake || 0);
-    setGoal(parsed.goal || 2772);
+    setIntake(cappedIntake);
+    setGoal(safeParsedGoal);
+    setLogs(todayLogs);
 
   } catch (e) {
     console.log(e);
@@ -274,7 +330,7 @@ useFocusEffect(
             </Text>
 
             <Text style={styles.remaining}>
-              {goal - intake} ml to go
+              {Math.max(goal - intake, 0)} ml to go
             </Text>
 
           </View>
@@ -334,7 +390,7 @@ useFocusEffect(
 
       <TouchableOpacity
         onPress={() =>
-          deleteLog(index, log.amount)
+          deleteLog(index, log.amount, log.id)
         }
       >
         <Ionicons
@@ -352,7 +408,10 @@ useFocusEffect(
 </View>
 
           {/* Insights Card */}
-          <View style={styles.insightCard}>
+          <TouchableOpacity
+            style={styles.insightCard}
+            onPress={() => navigation.navigate("Analytics")}
+          >
             <View style={styles.insightLeft}>
               <View style={styles.trophyCircle}>
                 <Text style={styles.trophy}>🏆</Text>
@@ -369,7 +428,7 @@ useFocusEffect(
             </View>
 
             <Text style={styles.arrow}>›</Text>
-          </View>
+          </TouchableOpacity>
 
         </View>
         {/* Custom Amount Modal */}

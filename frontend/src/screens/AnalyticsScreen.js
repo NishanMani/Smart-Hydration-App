@@ -1,24 +1,32 @@
 import { View, Text, StyleSheet, ScrollView,TouchableOpacity, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { BarChart, LineChart } from "react-native-chart-kit";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  getMonthlyAnalytics,
+  getPerformance,
+  getStreakAnalytics,
+  getWeeklyAnalytics,
+} from "../api/analyticsApi";
 
 const screenWidth = Dimensions.get("window").width;
 
 export default function AnalyticsScreen() {
+const navigation = useNavigation();
 
 const [activeTab, setActiveTab] = useState("weekly");
 
 const [weeklyIntake, setWeeklyIntake] = useState([0,0,0,0,0,0,0]);
+const [monthlyIntake, setMonthlyIntake] = useState([0,0,0,0,0,0,0]);
 const [streak, setStreak] = useState(0);
 const [goalCompletion, setGoalCompletion] = useState(0);
 const [avgIntake, setAvgIntake] = useState(0);
+const [daysMetGoal, setDaysMetGoal] = useState(0);
 
 
-const goal = 2772;
+const goal = 2000;
 
 useEffect(() => {
 loadAnalytics();
@@ -27,45 +35,52 @@ loadAnalytics();
 const loadAnalytics = async () => {
 
   try {
+    const [weeklyRes, monthlyRes, streakRes, performanceRes] = await Promise.all([
+      getWeeklyAnalytics(),
+      getMonthlyAnalytics(),
+      getStreakAnalytics(),
+      getPerformance(),
+    ]);
 
-    const data =
-      await AsyncStorage.getItem(
-        "hydrationData"
-      );
+    const weeklyTotals = Array.isArray(weeklyRes?.data?.dailyTotals)
+      ? weeklyRes.data.dailyTotals.map((n) => Number(n || 0))
+      : [0, 0, 0, 0, 0, 0, 0];
 
-    if (!data) return;
+    setWeeklyIntake(weeklyTotals);
 
-    const parsed = JSON.parse(data);
-    const logs = parsed.logs || [];
+    const monthlyTotals = Array.isArray(monthlyRes?.data?.dailyTotals)
+      ? monthlyRes.data.dailyTotals.map((n) => Number(n || 0))
+      : [];
+    const monthlySample = monthlyTotals.length
+      ? [
+          monthlyTotals[0] || 0,
+          monthlyTotals[4] || 0,
+          monthlyTotals[9] || 0,
+          monthlyTotals[14] || 0,
+          monthlyTotals[19] || 0,
+          monthlyTotals[24] || 0,
+          monthlyTotals[29] || monthlyTotals[monthlyTotals.length - 1] || 0,
+        ]
+      : [0, 0, 0, 0, 0, 0, 0];
+    setMonthlyIntake(monthlySample);
 
-    // WEEKLY TOTALS
+    const total = weeklyTotals.reduce((sum, value) => sum + value, 0);
+    const average = Math.round(total / 7);
+    const metGoalDays = weeklyTotals.filter((value) => value >= goal).length;
 
-    const last7 = [];
-
-    for (let i = 6; i >= 0; i--) {
-
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-
-      const label = date.toDateString();
-
-      const total = logs
-        .filter(
-          (l) => l.date === label
-        )
-        .reduce(
-          (sum, l) =>
-            sum + l.amount,
-          0
-        );
-
-      last7.push(total);
-    }
-
-    setWeeklyIntake(last7);
+    setAvgIntake(average);
+    setGoalCompletion(Math.round(Number(performanceRes?.data?.performancePercent || 0)));
+    setDaysMetGoal(metGoalDays);
+    setStreak(Number(streakRes?.data?.streak || 0));
 
   } catch (e) {
     console.log(e);
+    setWeeklyIntake([0, 0, 0, 0, 0, 0, 0]);
+    setMonthlyIntake([0, 0, 0, 0, 0, 0, 0]);
+    setAvgIntake(0);
+    setGoalCompletion(0);
+    setDaysMetGoal(0);
+    setStreak(0);
   }
 };
 
@@ -76,23 +91,32 @@ useFocusEffect(
 );
 
 const weeklyData = {
-labels: ["Wed","Thu","Fri","Sat","Sun","Mon","Tue"],
+labels: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
 datasets: [{ data: weeklyIntake }],
 };
 
 const monthlyData = {
 labels: ["1","5","10","15","20","25","30"],
-datasets: [{ data: [0,0,0,0,0,0,0] }],
+datasets: [{ data: monthlyIntake }],
 };
 
 const trendData = {
-labels: ["Wed","Thu","Fri","Sat","Sun","Mon","Tue"],
+labels: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
 datasets: [
 {
 data: weeklyIntake,
 strokeWidth: 3,
 },
 ],
+};
+
+const handleBack = () => {
+  if (navigation.canGoBack()) {
+    navigation.goBack();
+    return;
+  }
+
+  navigation.navigate("Home");
 };
 
 
@@ -104,7 +128,7 @@ return (
 
     {/* HEADER */}
     <View style={styles.header}>
-      <TouchableOpacity>
+      <TouchableOpacity onPress={handleBack}>
         <Ionicons name="arrow-back" size={22} color="#111" />
       </TouchableOpacity>
 
@@ -180,7 +204,7 @@ return (
 
       <View style={styles.card}>
         <Text style={styles.cardValue}>
-          {goalCompletion > 0 ? 1 : 0}
+          {daysMetGoal}
         </Text>
         <Text style={styles.cardLabel}>
           Days Met Goal
@@ -383,4 +407,3 @@ fontSize: 13,
 marginBottom: 6,
 },
 });
-

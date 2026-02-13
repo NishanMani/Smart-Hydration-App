@@ -8,6 +8,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { updateUserProfile } from "../api/userApi";
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
@@ -45,7 +47,41 @@ export default function OnboardingScreen() {
   return Math.round(base);
 };
 
-const handleComplete = () => {
+const handleComplete = async () => {
+  const goalMl = calculateGoal();
+
+  try {
+    const currentUserId = await AsyncStorage.getItem("currentUserId");
+    const onboardingKey = currentUserId
+      ? `onboardingCompleted:${currentUserId}`
+      : "onboardingCompleted";
+
+    await updateUserProfile({
+      weight: weight ? Number(weight) : undefined,
+      height: height ? Number(height) : undefined,
+      activityLevel: activity,
+      climate,
+      dailyGoal: String(goalMl),
+      unit,
+      pregnant: condition === "Pregnant",
+      breastfeeding: condition === "Breastfeeding",
+    }).catch(() => null);
+
+    const existing = await AsyncStorage.getItem("hydrationData");
+    const parsed = existing ? JSON.parse(existing) : {};
+    await AsyncStorage.setItem(
+      "hydrationData",
+      JSON.stringify({
+        ...parsed,
+        goal: goalMl,
+      })
+    );
+
+    await AsyncStorage.setItem(onboardingKey, "true");
+  } catch (e) {
+    console.log("Onboarding save error", e);
+  }
+
   navigation.replace("Dashboard");
 };
 
