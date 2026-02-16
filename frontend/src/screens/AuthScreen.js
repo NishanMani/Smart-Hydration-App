@@ -14,6 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import { registerUser, loginUser } from "../api/authApi";
 import { saveToken } from "../services/storageService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getPushTokenForBackend } from "../services/notificationService";
 
 export default function AuthScreen() {
   const [activeTab, setActiveTab] = useState("login");
@@ -68,28 +69,10 @@ export default function AuthScreen() {
     setIsSubmitting(true);
 
     try {
-      if (activeTab === "register") {
-        await registerUser({
-          name: name.trim(),
-          ...payload,
-        });
-
-        Alert.alert("Success", "Registered successfully. Please log in.");
-        setActiveTab("login");
-        setPassword("");
-      } else {
-        const res = await loginUser(payload);
-        const token = res?.data?.accessToken;
-        const user = res?.data?.user;
-
-        if (!token) {
-          Alert.alert("Error", "Token not received");
-          return;
-        }
-
+      const persistSession = async (authUser, token) => {
         await saveToken(token);
 
-        const currentUserId = user?.id ? String(user.id) : null;
+        const currentUserId = authUser?.id ? String(authUser.id) : null;
         const previousUserId = await AsyncStorage.getItem("currentUserId");
 
         if (
@@ -107,15 +90,60 @@ export default function AuthScreen() {
           await AsyncStorage.setItem("currentUserId", currentUserId);
         }
 
-        if (user?.name || user?.email) {
+        if (authUser?.name || authUser?.email) {
           await AsyncStorage.setItem(
             "userProfile",
             JSON.stringify({
-              name: user?.name || "",
-              email: user?.email || "",
+              name: authUser?.name || "",
+              email: authUser?.email || "",
             })
           );
         }
+
+        return { currentUserId };
+      };
+
+      if (activeTab === "register") {
+        const registerRes = await registerUser({
+          name: name.trim(),
+          ...payload,
+        });
+
+        let token = registerRes?.data?.accessToken;
+        let user = registerRes?.data?.user;
+
+        if (!token) {
+          const loginRes = await loginUser(payload);
+          token = loginRes?.data?.accessToken;
+          user = loginRes?.data?.user;
+        }
+
+        if (!token) {
+          Alert.alert("Error", "Token not received");
+          return;
+        }
+
+        const { currentUserId } = await persistSession(user, token);
+        await getPushTokenForBackend().catch(() => null);
+        const onboardingKey = currentUserId
+          ? `onboardingCompleted:${currentUserId}`
+          : "onboardingCompleted";
+
+        await AsyncStorage.removeItem(onboardingKey);
+
+        navigation.replace("Onboarding");
+      } else {
+        const res = await loginUser(payload);
+        const token = res?.data?.accessToken;
+        const user = res?.data?.user;
+
+        if (!token) {
+          Alert.alert("Error", "Token not received");
+          return;
+        }
+
+        const { currentUserId } = await persistSession(user, token);
+        await getPushTokenForBackend().catch(() => null);
 
         const onboardingKey = currentUserId
           ? `onboardingCompleted:${currentUserId}`

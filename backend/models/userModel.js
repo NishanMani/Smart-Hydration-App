@@ -20,10 +20,19 @@ const userSchema = new mongoose.Schema({
     height : {
         type :Number
     },
+    age : {
+        type : Number
+    },
+    gender : {
+        type : String
+    },
     activityLevel : {
         type : String
     },
     climate : {
+        type : String
+    },
+    lifestyle : {
         type : String
     },
     dailyGoal : {
@@ -40,7 +49,8 @@ const userSchema = new mongoose.Schema({
     },
     refreshToken : {
         type : String
-    }       
+    } 
+
 }, { timestamps: true })
 
 const User = mongoose.model('User',userSchema)

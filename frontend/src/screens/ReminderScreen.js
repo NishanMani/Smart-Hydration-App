@@ -7,46 +7,56 @@ import {
   Switch,
   Alert,
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useState, useEffect  } from "react";
+import { useState, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getReminder, setReminder } from "../api/reminderApi";
-
+import {
+  getCachedPushToken,
+  getPushTokenForBackend,
+} from "../services/notificationService";
 
 export default function ReminderScreen() {
-
   const navigation = useNavigation();
 
   const [enabled, setEnabled] = useState(true);
+  const [paused, setPaused] = useState(false);
+  const [pauseDurationMinutes, setPauseDurationMinutes] = useState(60);
+  const [sleepMode, setSleepMode] = useState(false);
   const [interval, setReminderInterval] = useState("30 minutes");
+  const [activityLevel, setActivityLevel] = useState("Moderate");
 
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date());
+  const [sleepStartTime, setSleepStartTime] = useState(new Date());
+  const [sleepEndTime, setSleepEndTime] = useState(new Date());
+  const [showSleepStart, setShowSleepStart] = useState(false);
+  const [showSleepEnd, setShowSleepEnd] = useState(false);
+  const [pushToken, setPushToken] = useState("");
+  const [isRefreshingToken, setIsRefreshingToken] = useState(false);
 
-  const [showStart, setShowStart] = useState(false);
-  const [showEnd, setShowEnd] = useState(false);
-
-  useEffect(() => { loadSettings();
+  useEffect(() => {
+    loadSettings();
+    loadCachedToken();
   }, []);
 
-  const intervals = [
-    "30 minutes",
-    "1 hour",
-    "1.5 hours",
-    "2 hours",
-    "3 hours"
-  ];
+  const intervals = ["30 minutes", "1 hour", "1.5 hours", "2 hours", "3 hours"];
+
   const intervalMap = {
-  "30 minutes": 30,
-  "1 hour": 60,
-  "1.5 hours": 90,
-  "2 hours": 120,
-  "3 hours": 180
-};
+    "30 minutes": 30,
+    "1 hour": 60,
+    "1.5 hours": 90,
+    "2 hours": 120,
+    "3 hours": 180,
+  };
+  const pauseDurations = [
+    { label: "15 min", value: 15 },
+    { label: "30 min", value: 30 },
+    { label: "1 hour", value: 60 },
+    { label: "2 hours", value: 120 },
+  ];
+
   const intervalLabelFromMinutes = {
     30: "30 minutes",
     60: "1 hour",
@@ -55,14 +65,14 @@ export default function ReminderScreen() {
     180: "3 hours",
   };
 
-  const onChangeStart = (event, selectedDate) => {
-    setShowStart(false);
-    if (selectedDate) setStartTime(selectedDate);
+  const onChangeSleepStart = (event, selectedDate) => {
+    setShowSleepStart(false);
+    if (selectedDate) setSleepStartTime(selectedDate);
   };
 
-  const onChangeEnd = (event, selectedDate) => {
-    setShowEnd(false);
-    if (selectedDate) setEndTime(selectedDate);
+  const onChangeSleepEnd = (event, selectedDate) => {
+    setShowSleepEnd(false);
+    if (selectedDate) setSleepEndTime(selectedDate);
   };
 
   const formatTime = (date) => {
@@ -71,442 +81,550 @@ export default function ReminderScreen() {
       minute: "2-digit",
     });
   };
+
   const toHHmm = (date) => {
     const hours = String(date.getHours()).padStart(2, "0");
     const minutes = String(date.getMinutes()).padStart(2, "0");
     return `${hours}:${minutes}`;
   };
+
   const fromHHmm = (value) => {
-    const [h, m] = String(value || "08:00").split(":").map(Number);
+    const [h, m] = String(value || "22:00").split(":").map(Number);
     const date = new Date();
-    date.setHours(Number.isFinite(h) ? h : 8, Number.isFinite(m) ? m : 0, 0, 0);
+    date.setHours(Number.isFinite(h) ? h : 22, Number.isFinite(m) ? m : 0, 0, 0);
     return date;
   };
+
+  const toMinutes = (date) => date.getHours() * 60 + date.getMinutes();
+
+  const isWithinSleepWindow = (valueMinutes, startMinutes, endMinutes) => {
+    if (startMinutes === endMinutes) return false;
+    if (startMinutes > endMinutes) {
+      return valueMinutes >= startMinutes || valueMinutes < endMinutes;
+    }
+    return valueMinutes >= startMinutes && valueMinutes < endMinutes;
+  };
+
+  const formatMinutesToTime = (minutes) => {
+    const date = new Date();
+    date.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+    return formatTime(date);
+  };
+
   const generateReminders = () => {
+    if (!enabled || paused) return [];
 
-  const reminders = [];
+    const intervalMinutes = intervalMap[interval];
+    if (!intervalMinutes) return [];
 
-  const start = new Date(startTime);
-  const end = new Date(endTime);
+    const reminders = [];
+    const sleepStartMinutes = toMinutes(sleepStartTime);
+    const sleepEndMinutes = toMinutes(sleepEndTime);
 
-  const intervalMinutes = intervalMap[interval];
-  if (!intervalMinutes || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return reminders;
-  }
-
-  // Keep schedule generation bounded to avoid UI freeze/ANR.
-  const normalizedStart = new Date(start);
-  const normalizedEnd = new Date(end);
-  normalizedStart.setSeconds(0, 0);
-  normalizedEnd.setSeconds(0, 0);
-  if (normalizedEnd < normalizedStart) {
-    normalizedEnd.setDate(normalizedEnd.getDate() + 1);
-  }
-
-  let current = new Date(normalizedStart);
-  let safetyCounter = 0;
-  const maxReminders = 96; // Up to 48 hours at 30-minute intervals.
-
-  while (current <= normalizedEnd && safetyCounter < maxReminders) {
-
-    reminders.push(formatTime(current));
-
-    current = new Date(
-      current.getTime() +
-      intervalMinutes * 60000
-    );
-    safetyCounter += 1;
-  }
-
-  return reminders;
-};
-
-  const saveSettings = async () => {
-  try {
-
-    const reminderData = {
-      enabled,
-      interval,
-      startTime,
-      endTime,
-    };
-
-    await AsyncStorage.setItem("reminderSettings", JSON.stringify(reminderData));
-
-    await setReminder({
-      interval: intervalMap[interval],
-      startTime: toHHmm(startTime),
-      endTime: toHHmm(endTime),
-      activityLevel: "Moderate",
-    }).catch(() => null);
-
-    Alert.alert("Saved", "Reminder settings saved");
-
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-const loadSettings = async () => {
-  try {
-    const res = await getReminder().catch(() => null);
-    const serverReminder = res?.data;
-
-    if (serverReminder) {
-      setEnabled(Boolean(serverReminder.isActive) && !Boolean(serverReminder.sleepMode));
-      setReminderInterval(
-        intervalLabelFromMinutes[Number(serverReminder.interval)] || "30 minutes"
-      );
-      setStartTime(fromHHmm(serverReminder.startTime));
-      setEndTime(fromHHmm(serverReminder.endTime));
-      return;
+    for (let minute = 0; minute < 24 * 60; minute += intervalMinutes) {
+      if (
+        sleepMode &&
+        isWithinSleepWindow(minute, sleepStartMinutes, sleepEndMinutes)
+      ) {
+        continue;
+      }
+      reminders.push(formatMinutesToTime(minute));
+      if (reminders.length >= 24) break;
     }
 
-    const data = await AsyncStorage.getItem("reminderSettings");
+    return reminders;
+  };
 
-    if (!data) return;
+  const saveSettings = async () => {
+    try {
+      const reminderData = {
+        enabled,
+        paused,
+        pauseDurationMinutes,
+        sleepMode,
+        interval,
+        sleepStartTime,
+        sleepEndTime,
+        activityLevel,
+      };
 
-    const parsed = JSON.parse(data);
+      await AsyncStorage.setItem("reminderSettings", JSON.stringify(reminderData));
 
-    setEnabled(parsed.enabled);
-    setReminderInterval(parsed.interval || "30 minutes");
-    setStartTime(new Date(parsed.startTime));
-    setEndTime(new Date(parsed.endTime));
+      const fcmToken = await getPushTokenForBackend();
 
-  } catch (error) {
-    console.log(error);
-  }
-};
+      await setReminder({
+        interval: intervalMap[interval],
+        activityLevel,
+        isActive: enabled,
+        isPaused: paused,
+        pauseDurationMinutes,
+        sleepMode,
+        sleepStartTime: toHHmm(sleepStartTime),
+        sleepEndTime: toHHmm(sleepEndTime),
+        ...(fcmToken ? { fcmToken } : {}),
+      }).catch(() => null);
 
-const reminderTimes = generateReminders();
+      Alert.alert("Saved", "Reminder settings saved");
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const loadCachedToken = async () => {
+    const token = await getCachedPushToken().catch(() => null);
+    setPushToken(token || "");
+  };
+
+  const refreshToken = async () => {
+    setIsRefreshingToken(true);
+    try {
+      const token = await getPushTokenForBackend().catch(() => null);
+      setPushToken(token || "");
+      Alert.alert(
+        "Push Token",
+        token
+          ? "FCM token captured on this device."
+          : "No token found. Check permissions/device build."
+      );
+    } finally {
+      setIsRefreshingToken(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const res = await getReminder().catch(() => null);
+      const serverReminder = res?.data;
+
+      if (serverReminder) {
+        setEnabled(Boolean(serverReminder.isActive));
+        setPaused(Boolean(serverReminder.isPaused));
+        setPauseDurationMinutes(Number(serverReminder.pauseDurationMinutes || 60));
+        setSleepMode(Boolean(serverReminder.sleepMode));
+        setActivityLevel(serverReminder.activityLevel || "Moderate");
+        setReminderInterval(
+          intervalLabelFromMinutes[Number(serverReminder.interval)] || "30 minutes"
+        );
+        setSleepStartTime(fromHHmm(serverReminder.sleepStartTime || "22:00"));
+        setSleepEndTime(fromHHmm(serverReminder.sleepEndTime || "06:00"));
+        return;
+      }
+
+      const data = await AsyncStorage.getItem("reminderSettings");
+      if (!data) return;
+
+      const parsed = JSON.parse(data);
+      setEnabled(Boolean(parsed.enabled));
+      setPaused(Boolean(parsed.paused));
+      setPauseDurationMinutes(Number(parsed.pauseDurationMinutes || 60));
+      setSleepMode(Boolean(parsed.sleepMode));
+      setReminderInterval(parsed.interval || "30 minutes");
+      setActivityLevel(parsed.activityLevel || "Moderate");
+      setSleepStartTime(new Date(parsed.sleepStartTime || new Date()));
+      setSleepEndTime(new Date(parsed.sleepEndTime || new Date()));
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const reminderTimes = generateReminders();
+
+  const previewText = sleepMode
+    ? `You'll receive reminders every ${interval}. Except between ${formatTime(
+        sleepStartTime
+      )} and ${formatTime(sleepEndTime)}.`
+    : `You'll receive reminders every ${interval} throughout the day.`;
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
-
-        {/* HEADER */}
         <View style={styles.header}>
-
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={22} color="#111" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>
-            Reminders
-          </Text>
-
+          <Text style={styles.headerTitle}>Reminders</Text>
         </View>
 
-        {/* ENABLE */}
         <View style={styles.cardRow}>
           <View style={styles.rowLeft}>
             <View style={styles.iconCircle}>
-              <Ionicons name="notifications-outline" size={18} color="#3b82f6"/>
+              <Ionicons name="notifications-outline" size={18} color="#3b82f6" />
             </View>
-
             <View>
-              <Text style={styles.cardTitle}>
-                Enable Reminders
-              </Text>
-              <Text style={styles.cardSub}>
-                Get notified to drink water
-              </Text>
+              <Text style={styles.cardTitle}>Enable Reminders</Text>
+              <Text style={styles.cardSub}>Master switch for all reminders</Text>
             </View>
           </View>
 
           <Switch
             value={enabled}
             onValueChange={setEnabled}
-            trackColor={{ false:"#d1d5db", true:"#3b82f6" }}
+            trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
           />
         </View>
 
-        {/* INTERVAL */}
-        <View style={styles.sectionCard}>
-
+        <View style={styles.cardRow}>
           <View style={styles.rowLeft}>
-            <View style={[styles.iconCircle,{backgroundColor:"#ede9fe"}]}>
-              <Ionicons name="time-outline" size={18} color="#7c3aed"/>
+            <View style={styles.iconCircle}>
+              <Ionicons name="pause-outline" size={18} color="#3b82f6" />
             </View>
-
             <View>
-              <Text style={styles.cardTitle}>
-                Reminder Interval
-              </Text>
-              <Text style={styles.cardSub}>
-                How often to remind you
-              </Text>
+              <Text style={styles.cardTitle}>Pause Reminders</Text>
+              <Text style={styles.cardSub}>Temporarily stop alerts instantly</Text>
             </View>
           </View>
+
+          <Switch
+            value={paused}
+            onValueChange={setPaused}
+            trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+          />
+        </View>
+
+        {paused && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Auto Resume After</Text>
+            {pauseDurations.map((item) => (
+              <TouchableOpacity
+                key={item.value}
+                style={[
+                  styles.intervalBtn,
+                  pauseDurationMinutes === item.value && styles.intervalActive,
+                ]}
+                onPress={() => setPauseDurationMinutes(item.value)}
+              >
+                <Text
+                  style={[
+                    styles.intervalText,
+                    pauseDurationMinutes === item.value && { color: "#fff" },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.sectionCard}>
+          <View style={styles.rowBetween}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="moon-outline" size={18} color="#3b82f6" />
+              </View>
+              <View>
+                <Text style={styles.cardTitle}>Sleep Mode</Text>
+                <Text style={styles.cardSub}>Pause reminders during sleep hours</Text>
+              </View>
+            </View>
+
+            <Switch
+              value={sleepMode}
+              onValueChange={setSleepMode}
+              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+            />
+          </View>
+
+          {sleepMode && (
+            <View style={styles.sleepTimesWrap}>
+              <Text style={styles.inputLabel}>Sleep Start Time</Text>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setShowSleepStart(true)}
+              >
+                <Text>{formatTime(sleepStartTime)}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.inputLabel}>Sleep End Time</Text>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setShowSleepEnd(true)}
+              >
+                <Text>{formatTime(sleepEndTime)}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Reminder Interval</Text>
 
           {intervals.map((item) => (
             <TouchableOpacity
               key={item}
               style={[
                 styles.intervalBtn,
-                interval === item && styles.intervalActive
+                interval === item && styles.intervalActive,
               ]}
               onPress={() => setReminderInterval(item)}
             >
               <Text
                 style={[
                   styles.intervalText,
-                  interval === item && {color:"#fff"}
+                  interval === item && { color: "#fff" },
                 ]}
               >
                 {item}
               </Text>
             </TouchableOpacity>
           ))}
-
         </View>
 
-        {/* ACTIVE HOURS (FIXED) */}
-        <View style={styles.sectionCard}>
-
-          <Text style={styles.sectionTitle}>
-            Active Hours
-          </Text>
-
-          {/* START */}
-          <Text style={styles.inputLabel}>
-            🌤 Start Time
-          </Text>
-
-          <TouchableOpacity
-            style={styles.input}
-            onPress={() => setShowStart(true)}
-          >
-            <Text>
-              {formatTime(startTime)}
-            </Text>
-          </TouchableOpacity>
-
-          {/* END */}
-          <Text style={styles.inputLabel}>
-            🌙 End Time
-          </Text>
-
-          <TouchableOpacity
-            style={styles.input}
-            onPress={() => setShowEnd(true)}
-          >
-            <Text>
-              {formatTime(endTime)}
-            </Text>
-          </TouchableOpacity>
-
-        </View>
-
-        {/* PREVIEW */}
         <View style={styles.previewCard}>
-          <Text style={styles.previewTitle}>
-            Preview
-          </Text>
+          <Text style={styles.previewTitle}>Preview</Text>
+          <Text style={styles.previewText}>{previewText}</Text>
 
-          <Text style={styles.previewText}>
-            You’ll receive reminders every{" "}
-            <Text style={{fontWeight:"700"}}>
-              {interval}
-            </Text>
-          </Text>
-
-          <Text style={styles.previewSub}>
-            Between {formatTime(startTime)} and {formatTime(endTime)}
-          </Text>
-          <View style={styles.scheduleBox}>
-
-  <Text style={styles.scheduleTitle}>
-    Reminder Schedule
-  </Text>
-
-  {reminderTimes.map((time, index) => (
-    <Text
-      key={index}
-      style={styles.scheduleItem}
-    >
-      🔔 {time}
-    </Text>
-  ))}
-
-</View>
+          {enabled && !paused && (
+            <View style={styles.scheduleBox}>
+              <Text style={styles.scheduleTitle}>Sample Schedule</Text>
+              {reminderTimes.slice(0, 12).map((time, index) => (
+                <Text key={`${time}-${index}`} style={styles.scheduleItem}>
+                  {time}
+                </Text>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* SAVE */}
-       <TouchableOpacity
-  style={styles.saveBtn}
-  onPress={saveSettings}
->
-          <Text style={styles.saveText}>
-            Save Settings
-          </Text>
+        <TouchableOpacity style={styles.saveBtn} onPress={saveSettings}>
+          <Text style={styles.saveText}>Save Settings</Text>
         </TouchableOpacity>
 
-        {/* PICKERS */}
-        {showStart && (
+        <View style={styles.debugCard}>
+          <Text style={styles.debugTitle}>Push Token Debug</Text>
+          <Text style={styles.debugToken}>
+            {pushToken || "No token cached yet"}
+          </Text>
+          <TouchableOpacity
+            style={[styles.debugBtn, isRefreshingToken && styles.debugBtnDisabled]}
+            onPress={refreshToken}
+            disabled={isRefreshingToken}
+          >
+            <Text style={styles.debugBtnText}>
+              {isRefreshingToken ? "Refreshing..." : "Refresh Token"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showSleepStart && (
           <DateTimePicker
-            value={startTime}
+            value={sleepStartTime}
             mode="time"
             is24Hour={false}
             display="default"
-            onChange={onChangeStart}
+            onChange={onChangeSleepStart}
           />
         )}
 
-        {showEnd && (
+        {showSleepEnd && (
           <DateTimePicker
-            value={endTime}
+            value={sleepEndTime}
             mode="time"
             is24Hour={false}
             display="default"
-            onChange={onChangeEnd}
+            onChange={onChangeSleepEnd}
           />
         )}
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: "#e6f0f4",
+  },
 
-safe:{ flex:1, backgroundColor:"#e6f0f4" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 20,
+  },
 
-header:{
-flexDirection:"row",
-alignItems:"center",
-padding:20
-},
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginLeft: 10,
+  },
 
-headerTitle:{
-fontSize:18,
-fontWeight:"700",
-marginLeft:10
-},
+  cardRow: {
+    backgroundColor: "#f3f4f6",
+    marginHorizontal: 20,
+    marginBottom: 14,
+    padding: 16,
+    borderRadius: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
 
-cardRow:{
-backgroundColor:"#f3f4f6",
-margin:20,
-padding:16,
-borderRadius:16,
-flexDirection:"row",
-justifyContent:"space-between",
-alignItems:"center"
-},
+  rowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    paddingRight: 10,
+  },
 
-rowLeft:{
-flexDirection:"row",
-alignItems:"center"
-},
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
 
-iconCircle:{
-width:36,
-height:36,
-borderRadius:18,
-backgroundColor:"#dbeafe",
-justifyContent:"center",
-alignItems:"center",
-marginRight:12
-},
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#dbeafe",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
 
-cardTitle:{ fontWeight:"700" },
-cardSub:{ fontSize:12, color:"#6b7280" },
+  cardTitle: {
+    fontWeight: "700",
+  },
 
-sectionCard:{
-backgroundColor:"#f3f4f6",
-marginHorizontal:20,
-marginBottom:20,
-padding:16,
-borderRadius:16
-},
+  cardSub: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 1,
+  },
 
-intervalBtn:{
-padding:14,
-borderRadius:12,
-backgroundColor:"#e5e7eb",
-marginTop:10,
-alignItems:"center"
-},
+  sectionCard: {
+    backgroundColor: "#f3f4f6",
+    marginHorizontal: 20,
+    marginBottom: 14,
+    padding: 16,
+    borderRadius: 16,
+  },
 
-intervalActive:{
-backgroundColor:"#8b5cf6"
-},
+  sleepTimesWrap: {
+    marginTop: 10,
+  },
 
-intervalText:{
-fontWeight:"600"
-},
+  sectionTitle: {
+    fontWeight: "700",
+    marginBottom: 10,
+  },
 
-sectionTitle:{
-fontWeight:"700",
-marginBottom:10
-},
+  inputLabel: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#374151",
+  },
 
-inputLabel:{
-marginTop:10,
-fontSize:13,
-color:"#374151"
-},
+  input: {
+    backgroundColor: "#fff",
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 6,
+  },
 
-input:{
-backgroundColor:"#fff",
-padding:14,
-borderRadius:10,
-marginTop:6
-},
+  intervalBtn: {
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: "#e5e7eb",
+    marginTop: 10,
+    alignItems: "center",
+  },
 
-previewCard:{
-margin:20,
-padding:18,
-borderRadius:18,
-backgroundColor:"#0ea5e9"
-},
+  intervalActive: {
+    backgroundColor: "#3b82f6",
+  },
 
-previewTitle:{
-color:"#fff",
-fontWeight:"700",
-marginBottom:6
-},
+  intervalText: {
+    fontWeight: "600",
+  },
 
-previewText:{
-color:"#fff",
-fontSize:14
-},
+  previewCard: {
+    marginHorizontal: 20,
+    marginTop: 6,
+    marginBottom: 12,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "#0ea5e9",
+  },
 
-previewSub:{
-color:"#e0f2fe",
-marginTop:4
-},
+  previewTitle: {
+    color: "#fff",
+    fontWeight: "700",
+    marginBottom: 8,
+  },
 
-saveBtn:{
-backgroundColor:"#3b82f6",
-margin:20,
-padding:16,
-borderRadius:16,
-alignItems:"center"
-},
+  previewText: {
+    color: "#fff",
+    fontSize: 14,
+    lineHeight: 20,
+  },
 
-saveText:{
-color:"#fff",
-fontWeight:"700"
-},
+  scheduleBox: {
+    marginTop: 12,
+    backgroundColor: "#0284c7",
+    padding: 12,
+    borderRadius: 12,
+  },
 
-scheduleBox:{
-  marginTop:12,
-  backgroundColor:"#0284c7",
-  padding:12,
-  borderRadius:12
-},
+  scheduleTitle: {
+    color: "#fff",
+    fontWeight: "700",
+    marginBottom: 6,
+  },
 
-scheduleTitle:{
-  color:"#fff",
-  fontWeight:"700",
-  marginBottom:6
-},
+  scheduleItem: {
+    color: "#e0f2fe",
+    fontSize: 13,
+    marginBottom: 2,
+  },
 
-scheduleItem:{
-  color:"#e0f2fe",
-  fontSize:13,
-  marginBottom:2
-}
+  saveBtn: {
+    backgroundColor: "#3b82f6",
+    margin: 20,
+    marginTop: 4,
+    padding: 16,
+    borderRadius: 16,
+    alignItems: "center",
+  },
 
+  saveText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+
+  debugCard: {
+    backgroundColor: "#f3f4f6",
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 14,
+    borderRadius: 12,
+  },
+
+  debugTitle: {
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+
+  debugToken: {
+    color: "#374151",
+    fontSize: 12,
+    marginBottom: 10,
+  },
+
+  debugBtn: {
+    backgroundColor: "#111827",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+
+  debugBtnDisabled: {
+    opacity: 0.6,
+  },
+
+  debugBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
 });

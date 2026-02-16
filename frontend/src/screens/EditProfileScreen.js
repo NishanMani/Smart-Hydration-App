@@ -15,6 +15,25 @@ import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserProfile, updateUserProfile } from "../api/userApi";
 
+const ACTIVITY_OPTIONS = [
+  "Sedentary",
+  "Light",
+  "Moderate",
+  "Active",
+  "Very Active",
+];
+
+const CLIMATE_OPTIONS = ["Cold", "Moderate", "Hot"];
+const CONDITION_OPTIONS = ["None", "Pregnant", "Breastfeeding"];
+const LIFESTYLE_OPTIONS = [
+  "Standard",
+  "Athlete",
+  "Office Worker",
+  "Outdoor Worker",
+  "Senior citizen",
+];
+const UNIT_OPTIONS = ["ml", "oz"];
+
 export default function EditProfileScreen() {
 
   const navigation = useNavigation();
@@ -26,6 +45,12 @@ export default function EditProfileScreen() {
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
+  const [gender, setGender] = useState("Male");
+  const [activityLevel, setActivityLevel] = useState("Moderate");
+  const [climate, setClimate] = useState("Moderate");
+  const [condition, setCondition] = useState("None");
+  const [lifestyle, setLifestyle] = useState("Standard");
+  const [unit, setUnit] = useState("ml");
 
   /* LOAD EXISTING DATA */
 
@@ -35,33 +60,67 @@ export default function EditProfileScreen() {
 
   const loadProfile = async () => {
     try {
-      const res = await getUserProfile().catch(() => null);
+      const [res, data] = await Promise.all([
+        getUserProfile().catch(() => null),
+        AsyncStorage.getItem("userProfile"),
+      ]);
       const user = res?.data;
+      const parsed = data ? JSON.parse(data) : null;
 
       if (user) {
         setName(user.name || "");
         setEmail(user.email || "");
-        setWeight(user.weight ? String(user.weight) : "");
-        setHeight(user.height ? String(user.height) : "");
-        setAge(user.age ? String(user.age) : "");
+        setWeight(user.weight ? String(user.weight) : (parsed?.weight ? String(parsed.weight) : ""));
+        setHeight(user.height ? String(user.height) : (parsed?.height ? String(parsed.height) : ""));
+        setAge(user.age ? String(user.age) : (parsed?.age ? String(parsed.age) : ""));
+        setGender(user.gender || "Male");
+        setActivityLevel(user.activityLevel || "Moderate");
+        setClimate(user.climate || "Moderate");
+        setLifestyle(user.lifestyle || "Standard");
+        setUnit(user.unit || "ml");
+        setCondition(
+          user.pregnant
+            ? "Pregnant"
+            : user.breastfeeding
+              ? "Breastfeeding"
+              : "None"
+        );
         return;
       }
-
-      const data = await AsyncStorage.getItem("userProfile");
-
-      if (!data) return;
-
-      const parsed = JSON.parse(data);
+      if (!parsed) return;
 
       setName(parsed.name || "");
       setEmail(parsed.email || "");
-      setWeight(parsed.weight || "");
-      setHeight(parsed.height || "");
-      setAge(parsed.age || "");
+      setWeight(parsed.weight ? String(parsed.weight) : "");
+      setHeight(parsed.height ? String(parsed.height) : "");
+      setAge(parsed.age ? String(parsed.age) : "");
+      setGender(parsed.gender || "Male");
+      setActivityLevel(parsed.activityLevel || "Moderate");
+      setClimate(parsed.climate || "Moderate");
+      setLifestyle(parsed.lifestyle || "Standard");
+      setUnit(parsed.unit || "ml");
+      setCondition(
+        parsed.pregnant
+          ? "Pregnant"
+          : parsed.breastfeeding
+            ? "Breastfeeding"
+            : "None"
+      );
 
     } catch (e) {
       console.log(e);
     }
+  };
+
+  const calculateGoal = () => {
+    let base = weight ? Number(weight) * 35 : 2000;
+
+    if (activityLevel === "Active") base += 300;
+    if (activityLevel === "Very Active") base += 500;
+    if (climate === "Hot") base += 300;
+    if (climate === "Cold") base -= 100;
+
+    return Math.round(base);
   };
 
   /* SAVE PROFILE */
@@ -74,20 +133,42 @@ export default function EditProfileScreen() {
     }
 
     try {
+      const parsedWeight = Number(weight);
+      const parsedHeight = Number(height);
+      const parsedAge = Number(age);
 
       const profile = {
         name: name.trim(),
         email: email.trim(),
-        weight: weight ? Number(weight) : undefined,
-        height: height ? Number(height) : undefined,
-        age: age ? Number(age) : undefined,
+        weight: weight.trim() === "" || Number.isNaN(parsedWeight) ? undefined : parsedWeight,
+        height: height.trim() === "" || Number.isNaN(parsedHeight) ? undefined : parsedHeight,
+        age: age.trim() === "" || Number.isNaN(parsedAge) ? undefined : parsedAge,
+        gender,
+        activityLevel,
+        climate,
+        lifestyle,
+        unit,
+        pregnant: condition === "Pregnant",
+        breastfeeding: condition === "Breastfeeding",
+        dailyGoal: String(calculateGoal()),
       };
 
-      await updateUserProfile(profile).catch(() => null);
+      const updateRes = await updateUserProfile(profile);
+      const updatedProfile = updateRes?.data || profile;
 
       await AsyncStorage.setItem(
         "userProfile",
-        JSON.stringify(profile)
+        JSON.stringify(updatedProfile)
+      );
+
+      const existingHydration = await AsyncStorage.getItem("hydrationData");
+      const parsedHydration = existingHydration ? JSON.parse(existingHydration) : {};
+      await AsyncStorage.setItem(
+        "hydrationData",
+        JSON.stringify({
+          ...parsedHydration,
+          goal: calculateGoal(),
+        })
       );
 
       Alert.alert(
@@ -98,7 +179,11 @@ export default function EditProfileScreen() {
       navigation.goBack();
 
     } catch (e) {
-      console.log(e);
+      console.log("Profile update failed", e);
+      Alert.alert(
+        "Update Failed",
+        e?.response?.data?.message || "Could not update profile. Please try again."
+      );
     }
   };
 
@@ -189,10 +274,176 @@ export default function EditProfileScreen() {
 
           <TextInput
             value={age}
-            onChangeText={setAge}
+            onChangeText={(text) => setAge(text.replace(/[^0-9]/g, ""))}
             style={styles.input}
             keyboardType="numeric"
+            maxLength={3}
           />
+
+          {/* GENDER */}
+          <Text style={styles.label}>
+            Gender
+          </Text>
+          <View style={styles.optionRow}>
+            {["Male", "Female", "Other"].map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.optionBtn,
+                  gender === item && styles.optionBtnActive,
+                ]}
+                onPress={() => setGender(item)}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    gender === item && styles.optionTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* ACTIVITY */}
+          <Text style={styles.label}>
+            Activity Level
+          </Text>
+          <View style={styles.optionWrap}>
+            {ACTIVITY_OPTIONS.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.tagBtn,
+                  activityLevel === item && styles.tagBtnActive,
+                ]}
+                onPress={() => setActivityLevel(item)}
+              >
+                <Text
+                  style={[
+                    styles.tagText,
+                    activityLevel === item && styles.tagTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* CLIMATE */}
+          <Text style={styles.label}>
+            Climate
+          </Text>
+          <View style={styles.optionRow}>
+            {CLIMATE_OPTIONS.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.optionBtn,
+                  climate === item && styles.optionBtnActive,
+                ]}
+                onPress={() => setClimate(item)}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    climate === item && styles.optionTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* CONDITION */}
+          <Text style={styles.label}>
+            Special Condition
+          </Text>
+          <View style={styles.optionWrap}>
+            {CONDITION_OPTIONS.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.tagBtn,
+                  condition === item && styles.tagBtnActive,
+                ]}
+                onPress={() => setCondition(item)}
+              >
+                <Text
+                  style={[
+                    styles.tagText,
+                    condition === item && styles.tagTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* LIFESTYLE */}
+          <Text style={styles.label}>
+            Lifestyle
+          </Text>
+          <View style={styles.optionWrap}>
+            {LIFESTYLE_OPTIONS.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.tagBtn,
+                  lifestyle === item && styles.tagBtnActive,
+                ]}
+                onPress={() => setLifestyle(item)}
+              >
+                <Text
+                  style={[
+                    styles.tagText,
+                    lifestyle === item && styles.tagTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* UNIT */}
+          <Text style={styles.label}>
+            Preferred Unit
+          </Text>
+          <View style={styles.optionRow}>
+            {UNIT_OPTIONS.map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.optionBtn,
+                  unit === item && styles.optionBtnActive,
+                ]}
+                onPress={() => setUnit(item)}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    unit === item && styles.optionTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.goalBox}>
+            <Text style={styles.goalLabel}>
+              Suggested Daily Goal
+            </Text>
+            <Text style={styles.goalValue}>
+              {calculateGoal()} {unit}
+            </Text>
+          </View>
 
         </View>
 
@@ -257,6 +508,84 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 12,
     borderRadius: 12,
+  },
+
+  optionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  optionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  optionBtn: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+
+  optionBtnActive: {
+    backgroundColor: "#3b82f6",
+    borderColor: "#3b82f6",
+  },
+
+  optionText: {
+    color: "#1f2937",
+    fontWeight: "500",
+  },
+
+  optionTextActive: {
+    color: "#fff",
+  },
+
+  tagBtn: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  tagBtnActive: {
+    backgroundColor: "#3b82f6",
+    borderColor: "#3b82f6",
+  },
+
+  tagText: {
+    color: "#1f2937",
+    fontWeight: "500",
+  },
+
+  tagTextActive: {
+    color: "#fff",
+  },
+
+  goalBox: {
+    marginTop: 14,
+    backgroundColor: "#dbeafe",
+    borderRadius: 12,
+    padding: 12,
+  },
+
+  goalLabel: {
+    color: "#1d4ed8",
+    fontSize: 12,
+  },
+
+  goalValue: {
+    color: "#1e3a8a",
+    fontSize: 20,
+    fontWeight: "700",
   },
 
   /* SAVE */

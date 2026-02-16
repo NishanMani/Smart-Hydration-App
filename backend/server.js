@@ -9,7 +9,7 @@ import userRoutes from './routes/userRoutes.js'
 import waterRoutes from './routes/waterLogRoutes.js'
 import reminderRoutes from './routes/reminderRoutes.js'
 import analyticsRoutes from './routes/analyticsRoutes.js'
-// import cron from 'node-cron';
+import './cron/reminderCron.js';
 
 dotenv.config()
 await connectDB()

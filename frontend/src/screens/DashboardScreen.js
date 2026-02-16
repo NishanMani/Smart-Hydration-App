@@ -35,9 +35,16 @@ export default function DashboardScreen() {
   const [logs, setLogs] = useState([]);
   const [streak, setStreak] = useState(0);
   const [lastCompletedDate, setLastCompletedDate] = useState(null);
+  const [profileName, setProfileName] = useState("User");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [customAmount, setCustomAmount] = useState("");
+
+  const currentDateLabel = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
  
 
@@ -211,6 +218,22 @@ const deleteLog = async (index, amount, id) => {
 const loadHydrationData = async () => {
 
   try {
+    const syncProfileName = async (serverProfile = null) => {
+      if (serverProfile?.name?.trim()) {
+        setProfileName(serverProfile.name.trim());
+        return;
+      }
+
+      const localProfile = await AsyncStorage.getItem("userProfile");
+      if (!localProfile) {
+        setProfileName("User");
+        return;
+      }
+
+      const parsedProfile = JSON.parse(localProfile);
+      setProfileName(parsedProfile?.name?.trim() || "User");
+    };
+
     const summaryRes = await getDailySummary().catch(() => null);
     const summary = summaryRes?.data;
 
@@ -232,6 +255,7 @@ const loadHydrationData = async () => {
         AsyncStorage.getItem("hydrationData"),
       ]);
       const localParsed = local ? JSON.parse(local) : {};
+      await syncProfileName(profileRes?.data);
       const serverGoal = Number(profileRes?.data?.dailyGoal || 0);
       const localGoal = Number(localParsed.goal || 2772);
       const selectedGoal = serverGoal > 0 ? serverGoal : localGoal;
@@ -248,6 +272,7 @@ const loadHydrationData = async () => {
     if (!data) return;
 
     const parsed = JSON.parse(data);
+    await syncProfileName();
     const today = new Date().toDateString();
     const todayLogs = (parsed.logs || []).filter((log) => log.date === today);
     const parsedGoal = Number(parsed.goal || 2772);
@@ -283,10 +308,10 @@ useFocusEffect(
           <View style={styles.header}>
             <View>
               <Text style={styles.greeting}>
-                Hello, Girish
+                Hello, {profileName}
               </Text>
               <Text style={styles.date}>
-                Tuesday, February 10
+                {currentDateLabel}
               </Text>
             </View>
 

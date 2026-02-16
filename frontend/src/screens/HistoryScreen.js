@@ -5,6 +5,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -12,33 +14,182 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import {
+  deleteWaterLog as deleteWaterLogApi,
+  exportHistoryPdf as exportHistoryPdfApi,
+  getHistoryInsights,
+  updateWaterLog as updateWaterLogApi,
+} from "../api/waterApi";
 
 export default function HistoryScreen() {
 
   const navigation = useNavigation();
 
   const [logs, setLogs] = useState([]);
-  const goal = 2772;
+  const [goal, setGoal] = useState(2772);
+  const [weeklyStats, setWeeklyStats] = useState({
+    avgIntake: 0,
+    completion: 0,
+  });
+  const [monthlyStats, setMonthlyStats] = useState({
+    thisMonthTotal: 0,
+    lastMonthTotal: 0,
+    percentChange: 0,
+  });
+  const [streak, setStreak] = useState(0);
+  const [badge, setBadge] = useState("Start Your Journey 💧");
+  const [editVisible, setEditVisible] = useState(false);
+  const [editAmount, setEditAmount] = useState("");
+  const [editingItem, setEditingItem] = useState(null);
+  const [editingIndex, setEditingIndex] = useState(-1);
   const MAX_HISTORY_ITEMS = 600;
+
+  const getBadge = useCallback((value) => {
+    if (value >= 30) return "Hydration Champion 🏆";
+    if (value >= 14) return "Hydration Pro 💪";
+    if (value >= 7) return "Consistency Star ⭐";
+    if (value >= 3) return "Getting There 👍";
+    return "Start Your Journey 💧";
+  }, []);
 
   const sanitizeLogs = useCallback((items) => {
     if (!Array.isArray(items)) return [];
 
     return items
       .filter((log) => log && typeof log === "object")
-      .map((log) => ({
-        date: log.date || "Today",
-        time: log.time || "--:--",
-        amount: Number(log.amount || 0),
-      }))
+      .map((log) => {
+        const parsedDate = log.date ? new Date(log.date) : null;
+        const hasValidDate = parsedDate && !Number.isNaN(parsedDate.getTime());
+
+        return {
+          id: log.id || log._id,
+          date: hasValidDate
+            ? parsedDate.toDateString()
+            : log.date || "Today",
+          time:
+            log.time ||
+            (hasValidDate
+              ? parsedDate.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "--:--"),
+          amount: Number(log.amount || 0),
+        };
+      })
       .filter((log) => Number.isFinite(log.amount) && log.amount >= 0)
       .slice(-MAX_HISTORY_ITEMS);
   }, []);
+
+  const calculateLocalInsights = useCallback(
+    (items, dailyGoal) => {
+      const totalsByDate = items.reduce((acc, log) => {
+        const dateKey = log.date || new Date().toDateString();
+        acc[dateKey] = (acc[dateKey] || 0) + Number(log.amount || 0);
+        return acc;
+      }, {});
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const weeklyTotals = [];
+      for (let i = 6; i >= 0; i -= 1) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        weeklyTotals.push(Number(totalsByDate[d.toDateString()] || 0));
+      }
+      const weeklyTotal = weeklyTotals.reduce((sum, value) => sum + value, 0);
+      const avgIntake = Math.round(weeklyTotal / 7);
+      const completion = Math.min(
+        Math.round((avgIntake / Math.max(dailyGoal, 1)) * 100),
+        100
+      );
+
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      const lastMonthDate = new Date(thisYear, thisMonth - 1, 1);
+      const lastMonth = lastMonthDate.getMonth();
+      const lastMonthYear = lastMonthDate.getFullYear();
+
+      let thisMonthTotal = 0;
+      let lastMonthTotal = 0;
+      items.forEach((log) => {
+        const logDate = new Date(log.date);
+        if (Number.isNaN(logDate.getTime())) return;
+
+        const amount = Number(log.amount || 0);
+        if (
+          logDate.getMonth() === thisMonth &&
+          logDate.getFullYear() === thisYear
+        ) {
+          thisMonthTotal += amount;
+        } else if (
+          logDate.getMonth() === lastMonth &&
+          logDate.getFullYear() === lastMonthYear
+        ) {
+          lastMonthTotal += amount;
+        }
+      });
+      const percentChange =
+        lastMonthTotal > 0
+          ? Math.round(((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100)
+          : 0;
+
+      let streakCount = 0;
+      const cursor = new Date(today);
+      while (true) {
+        const key = cursor.toDateString();
+        if (Number(totalsByDate[key] || 0) >= dailyGoal) {
+          streakCount += 1;
+          cursor.setDate(cursor.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+
+      return {
+        weekly: { avgIntake, completion },
+        monthly: { thisMonthTotal, lastMonthTotal, percentChange },
+        streak: streakCount,
+      };
+    },
+    []
+  );
 
   /* LOAD HISTORY */
 
   const loadHistory = useCallback(async () => {
     try {
+      const res = await getHistoryInsights({
+        limit: MAX_HISTORY_ITEMS,
+      }).catch(() => null);
+
+      if (res?.data?.success) {
+        const serverLogs = sanitizeLogs(res.data.logs || []);
+        setLogs(serverLogs);
+
+        const goalPerDay = Number(res.data.goalPerDay || 2772) || 2772;
+        setGoal(goalPerDay);
+
+        const weekly = res.data?.insights?.weeklyPerformance;
+        const monthly = res.data?.insights?.monthlyComparison;
+        const streakInfo = res.data?.insights?.streak;
+
+        setWeeklyStats({
+          avgIntake: Number(weekly?.avgIntake || 0),
+          completion: Number(weekly?.completionPercent || 0),
+        });
+        setMonthlyStats({
+          thisMonthTotal: Number(monthly?.thisMonthTotal || 0),
+          lastMonthTotal: Number(monthly?.lastMonthTotal || 0),
+          percentChange: Number(monthly?.percentChange || 0),
+        });
+        const currentStreak = Number(streakInfo?.current || 0);
+        setStreak(currentStreak);
+        setBadge(streakInfo?.badge ? `${streakInfo.badge}` : getBadge(currentStreak));
+        return;
+      }
 
       const data = await AsyncStorage.getItem(
         "hydrationData"
@@ -46,18 +197,33 @@ export default function HistoryScreen() {
 
       if (!data) {
         setLogs([]);
+        setWeeklyStats({ avgIntake: 0, completion: 0 });
+        setMonthlyStats({
+          thisMonthTotal: 0,
+          lastMonthTotal: 0,
+          percentChange: 0,
+        });
+        setStreak(0);
+        setBadge(getBadge(0));
         return;
       }
 
       const parsed = JSON.parse(data);
-      const parsedLogs = sanitizeLogs(parsed?.logs);
+      const parsedLogs = sanitizeLogs(parsed?.logs || []);
+      const localGoal = Number(parsed?.goal || 2772) || 2772;
+      const localInsights = calculateLocalInsights(parsedLogs, localGoal);
 
       setLogs(parsedLogs);
+      setGoal(localGoal);
+      setWeeklyStats(localInsights.weekly);
+      setMonthlyStats(localInsights.monthly);
+      setStreak(localInsights.streak);
+      setBadge(getBadge(localInsights.streak));
 
     } catch (e) {
       console.log(e);
     }
-  }, [sanitizeLogs]);
+  }, [sanitizeLogs, getBadge, calculateLocalInsights]);
 
   useEffect(() => {
     loadHistory();
@@ -71,8 +237,13 @@ export default function HistoryScreen() {
 
   /* DELETE LOG */
 
-  const deleteLog = useCallback(async (index) => {
+  const deleteLog = useCallback(async (index, item) => {
     try {
+      if (item?.id) {
+        await deleteWaterLogApi(item.id).catch(() => null);
+        await loadHistory();
+        return;
+      }
 
       const data = await AsyncStorage.getItem(
         "hydrationData"
@@ -113,11 +284,108 @@ export default function HistoryScreen() {
       );
 
       setLogs(sanitizeLogs(updatedLogs));
+      const localGoal = Number(parsed?.goal || goal) || goal;
+      const localInsights = calculateLocalInsights(updatedLogs, localGoal);
+      setGoal(localGoal);
+      setWeeklyStats(localInsights.weekly);
+      setMonthlyStats(localInsights.monthly);
+      setStreak(localInsights.streak);
+      setBadge(getBadge(localInsights.streak));
 
     } catch (e) {
       console.log(e);
     }
-  }, [sanitizeLogs]);
+  }, [sanitizeLogs, loadHistory, goal, calculateLocalInsights, getBadge]);
+
+  const openEditLog = useCallback((index, item) => {
+    setEditingIndex(index);
+    setEditingItem(item);
+    setEditAmount(String(item?.amount || ""));
+    setEditVisible(true);
+  }, []);
+
+  const saveEditedLog = useCallback(async () => {
+    const parsedAmount = Number(editAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert("Error", "Enter a valid amount");
+      return;
+    }
+
+    try {
+      const hasServerId =
+        typeof editingItem?.id === "string" &&
+        /^[a-fA-F0-9]{24}$/.test(editingItem.id);
+      if (hasServerId) {
+        const updated = await updateWaterLogApi(editingItem.id, parsedAmount)
+          .then(() => true)
+          .catch(() => false);
+
+        if (updated) {
+          setEditVisible(false);
+          setEditingItem(null);
+          setEditingIndex(-1);
+          setEditAmount("");
+          await loadHistory();
+          return;
+        }
+      }
+
+      const data = await AsyncStorage.getItem("hydrationData");
+      if (!data) return;
+
+      const parsed = JSON.parse(data);
+      const existingLogs = sanitizeLogs(parsed?.logs || []);
+      if (editingIndex < 0 || editingIndex >= existingLogs.length) return;
+
+      const updatedLogs = existingLogs.map((log, idx) =>
+        idx === editingIndex ? { ...log, amount: parsedAmount } : log
+      );
+
+      const today = new Date().toDateString();
+      const todaysLogs = updatedLogs.filter((log) => log.date === today);
+      const newIntake = todaysLogs.reduce(
+        (sum, log) => sum + Number(log.amount || 0),
+        0
+      );
+
+      await AsyncStorage.setItem(
+        "hydrationData",
+        JSON.stringify({
+          ...parsed,
+          logs: updatedLogs,
+          intake: newIntake,
+        })
+      );
+
+      setLogs(updatedLogs);
+      const localGoal = Number(parsed?.goal || goal) || goal;
+      const localInsights = calculateLocalInsights(updatedLogs, localGoal);
+      setGoal(localGoal);
+      setWeeklyStats(localInsights.weekly);
+      setMonthlyStats(localInsights.monthly);
+      setStreak(localInsights.streak);
+      setBadge(getBadge(localInsights.streak));
+      setEditVisible(false);
+      setEditingItem(null);
+      setEditingIndex(-1);
+      setEditAmount("");
+    } catch (e) {
+      console.log(e);
+      Alert.alert(
+        "Error",
+        e?.response?.data?.message || "Unable to update log"
+      );
+    }
+  }, [
+    editAmount,
+    editingIndex,
+    editingItem,
+    loadHistory,
+    sanitizeLogs,
+    goal,
+    calculateLocalInsights,
+    getBadge,
+  ]);
 
   /* GROUP BY DATE */
 
@@ -141,234 +409,104 @@ export default function HistoryScreen() {
   };
 
   const groupedLogs = useMemo(() => groupByDate(), [logs]);
-
-  // WEEKLY PERFORMANCE
-
-const calculateWeeklyPerformance = () => {
-
-  if (logs.length === 0) {
-    return {
-      avgIntake: 0,
-      completion: 0,
+  const sortedDates = useMemo(() => {
+    const toTimestamp = (value) => {
+      if (!value || value === "Today") return new Date().setHours(0, 0, 0, 0);
+      const parsed = new Date(value).getTime();
+      return Number.isNaN(parsed) ? 0 : parsed;
     };
-  }
 
-  // Take last 7 logs days intake
+    return Object.keys(groupedLogs).sort(
+      (a, b) => toTimestamp(b) - toTimestamp(a)
+    );
+  }, [groupedLogs]);
 
-  const last7 = logs.slice(-7);
-
-  const total = last7.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0
-  );
-
-  const avgIntake = Math.round(
-    total / last7.length
-  );
-
-  const completion = Math.min(
-    Math.round((avgIntake / goal) * 100),
-    100
-  );
-
-  return {
-    avgIntake,
-    completion,
-  };
-};
-
-const weeklyStats =
-  calculateWeeklyPerformance();
-
-  // MONTHLY COMPARISON
-
-const calculateMonthlyComparison = () => {
-
-  const now = new Date();
-
-  const currentMonth =
-    now.getMonth();
-
-  const lastMonth =
-    currentMonth === 0
-      ? 11
-      : currentMonth - 1;
-
-  let thisMonthTotal = 0;
-  let lastMonthTotal = 0;
-
+const exportPDF = async () => {
+  const totals = {};
   logs.forEach((log) => {
-
-    if (!log.date) return;
-
-    const logDate =
-      new Date(log.date);
-
-    const logMonth =
-      logDate.getMonth();
-
-    if (logMonth === currentMonth) {
-      thisMonthTotal += Number(log.amount || 0);
+    if (!totals[log.date]) {
+      totals[log.date] = 0;
     }
-
-    if (logMonth === lastMonth) {
-      lastMonthTotal += Number(log.amount || 0);
-    }
-
+    totals[log.date] += Number(log.amount || 0);
   });
 
-  let percentChange = 0;
-
-  if (lastMonthTotal > 0) {
-    percentChange = Math.round(
-      ((thisMonthTotal -
-        lastMonthTotal) /
-        lastMonthTotal) * 100
-    );
-  }
-
-  return {
-    thisMonthTotal,
-    lastMonthTotal,
-    percentChange,
-  };
-};
-
-const monthlyStats =
-  calculateMonthlyComparison();
-
-  // STREAK CALCULATION
-
-const calculateStreak = () => {
-
-  if (!logs.length) return 0;
-
-  const totalsByDate = logs.reduce((acc, log) => {
-    const dateKey = log.date || new Date().toDateString();
-    acc[dateKey] = (acc[dateKey] || 0) + Number(log.amount || 0);
-    return acc;
-  }, {});
-
-  let streak = 0;
-  const currentDate = new Date();
-  currentDate.setHours(0, 0, 0, 0);
-
-  while (true) {
-    const day = new Date(currentDate);
-    day.setDate(day.getDate() - streak);
-    const dayKey = day.toDateString();
-
-    if ((totalsByDate[dayKey] || 0) >= goal) {
-      streak += 1;
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-};
-
-const streak = calculateStreak();
-
-const getBadge = () => {
-
-  if (streak >= 30)
-    return "Hydration Champion 🏆";
-
-  if (streak >= 14)
-    return "Hydration Pro 💪";
-
-  if (streak >= 7)
-    return "Consistency Star ⭐";
-
-  if (streak >= 3)
-    return "Getting There 👍";
-
-  return "Start Your Journey 💧";
-};
-
-const badge = getBadge();
-  
-const exportPDF = async () => {
+  const html = `
+    <html>
+    <body style="font-family: Arial; padding:20px;">
+      <h1>Hydration Report 💧</h1>
+      <h3>Total Logs: ${logs.length}</h3>
+      <table border="1" cellpadding="8" cellspacing="0" width="100%">
+        <tr>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Amount (ml)</th>
+        </tr>
+        ${logs
+          .map(
+            (log) => `
+          <tr>
+            <td>${log.date}</td>
+            <td>${log.time}</td>
+            <td>${log.amount}</td>
+          </tr>
+        `
+          )
+          .join("")}
+      </table>
+      <h2>Daily Totals</h2>
+      <ul>
+        ${Object.keys(totals)
+          .map(
+            (date) => `
+          <li>${date} → ${totals[date]} ml</li>
+        `
+          )
+          .join("")}
+      </ul>
+    </body>
+    </html>
+  `;
 
   try {
-
     if (!logs.length) {
       alert("No history to export");
       return;
     }
-
-    // GROUP TOTALS
-
-    const totals = {};
-
-    logs.forEach((log) => {
-
-      if (!totals[log.date]) {
-        totals[log.date] = 0;
-      }
-
-      totals[log.date] += Number(log.amount || 0);
-
-    });
-
-    // HTML CONTENT
-
-    const html = `
-      <html>
-      <body style="font-family: Arial; padding:20px;">
-
-        <h1>Hydration Report 💧</h1>
-
-        <h3>Total Logs: ${logs.length}</h3>
-
-        <table border="1" 
-          cellpadding="8" 
-          cellspacing="0"
-          width="100%"
-        >
-          <tr>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Amount (ml)</th>
-          </tr>
-
-          ${logs.map(
-            (log) => `
-            <tr>
-              <td>${log.date}</td>
-              <td>${log.time}</td>
-              <td>${log.amount}</td>
-            </tr>
-          `
-          ).join("")}
-
-        </table>
-
-        <h2>Daily Totals</h2>
-
-        <ul>
-          ${Object.keys(totals).map(
-            (date) => `
-            <li>
-              ${date} → 
-              ${totals[date]} ml
-            </li>
-          `
-          ).join("")}
-        </ul>
-
-      </body>
-      </html>
-    `;
-
-    const Print = await import("expo-print");
     const Sharing = await import("expo-sharing");
+    let uri = null;
 
-    const { uri } =
-      await Print.printToFileAsync({
-        html,
-      });
+    // 1) Prefer backend-generated PDF (pdfkit)
+    try {
+      const [FileSystem, pdfRes] = await Promise.all([
+        import("expo-file-system/legacy"),
+        exportHistoryPdfApi(),
+      ]);
+
+      const pdfBase64 = pdfRes?.data?.base64;
+      const fileName = pdfRes?.data?.fileName || "hydration-report.pdf";
+
+      if (pdfBase64) {
+        const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        uri = `${dir}${fileName}`;
+        await FileSystem.writeAsStringAsync(uri, pdfBase64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+    } catch (backendError) {
+      console.log("Backend PDF export failed, falling back to client export", backendError);
+    }
+
+    // 2) Fallback: frontend HTML -> PDF export
+    if (!uri) {
+      const Print = await import("expo-print");
+      const printed = await Print.printToFileAsync({ html });
+      uri = printed?.uri || null;
+    }
+
+    if (!uri) {
+      Alert.alert("Error", "PDF generation failed.");
+      return;
+    }
 
     const canShare = await Sharing.isAvailableAsync();
     if (!canShare) {
@@ -383,6 +521,10 @@ const exportPDF = async () => {
 
   } catch (e) {
     console.log(e);
+    Alert.alert(
+      "Error",
+      e?.response?.data?.message || e?.message || "Unable to export PDF."
+    );
   }
 
 };
@@ -553,7 +695,7 @@ const exportPDF = async () => {
         )}
 
         {/* GROUPED LOG LIST */}
-        {Object.keys(groupedLogs).map((date) => (
+        {sortedDates.map((date) => (
 
           <View key={date}>
 
@@ -639,25 +781,42 @@ const exportPDF = async () => {
                     </Text>
                   </View>
 
-                  <Ionicons
-                    name="trash-outline"
-                    size={18}
-                    color="#ef4444"
-                    onPress={() =>
-                      Alert.alert(
-                        "Delete Log",
-                        "Are you sure you want to delete this entry?",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Delete",
-                            style: "destructive",
-                            onPress: () => deleteLog(globalIndex),
-                          },
-                        ]
-                      )
-                    }
-                  />
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity
+                      onPress={() => openEditLog(globalIndex, item)}
+                      style={styles.iconBtn}
+                    >
+                      <Ionicons
+                        name="create-outline"
+                        size={18}
+                        color="#2563eb"
+                      />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() =>
+                        Alert.alert(
+                          "Delete Log",
+                          "Are you sure you want to delete this entry?",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: () => deleteLog(globalIndex, item),
+                            },
+                          ]
+                        )
+                      }
+                      style={styles.iconBtn}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#ef4444"
+                      />
+                    </TouchableOpacity>
+                  </View>
 
                 </View>
 
@@ -670,6 +829,40 @@ const exportPDF = async () => {
         ))}
 
       </ScrollView>
+
+      <Modal
+        visible={editVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Intake</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editAmount}
+              onChangeText={setEditAmount}
+              keyboardType="numeric"
+              placeholder="Enter amount in ml"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setEditVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={saveEditedLog}
+              >
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );
@@ -749,6 +942,16 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     fontSize: 12,
     marginTop: 2,
+  },
+
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  iconBtn: {
+    padding: 6,
+    marginLeft: 6,
   },
   dateHeader: {
   flexDirection: "row",
@@ -907,6 +1110,65 @@ exportText: {
   color: "#fff",
   fontWeight: "600",
   fontSize: 12,
+},
+
+modalOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.35)",
+  justifyContent: "center",
+  paddingHorizontal: 24,
+},
+
+modalCard: {
+  backgroundColor: "#f3f4f6",
+  borderRadius: 16,
+  padding: 18,
+},
+
+modalTitle: {
+  fontSize: 16,
+  fontWeight: "700",
+  color: "#111827",
+},
+
+modalInput: {
+  marginTop: 12,
+  backgroundColor: "#fff",
+  borderWidth: 1,
+  borderColor: "#e5e7eb",
+  borderRadius: 10,
+  padding: 12,
+},
+
+modalActions: {
+  marginTop: 14,
+  flexDirection: "row",
+  justifyContent: "flex-end",
+},
+
+modalCancelBtn: {
+  paddingVertical: 10,
+  paddingHorizontal: 14,
+  backgroundColor: "#e5e7eb",
+  borderRadius: 10,
+  marginRight: 10,
+},
+
+modalCancelText: {
+  color: "#374151",
+  fontWeight: "600",
+},
+
+modalSaveBtn: {
+  paddingVertical: 10,
+  paddingHorizontal: 14,
+  backgroundColor: "#3b82f6",
+  borderRadius: 10,
+},
+
+modalSaveText: {
+  color: "#fff",
+  fontWeight: "600",
 },
 
 });

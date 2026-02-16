@@ -59,8 +59,11 @@ const handleComplete = async () => {
     await updateUserProfile({
       weight: weight ? Number(weight) : undefined,
       height: height ? Number(height) : undefined,
+      age: age ? Number(age) : undefined,
+      gender,
       activityLevel: activity,
       climate,
+      lifestyle,
       dailyGoal: String(goalMl),
       unit,
       pregnant: condition === "Pregnant",

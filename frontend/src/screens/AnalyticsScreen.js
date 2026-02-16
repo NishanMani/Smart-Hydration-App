@@ -9,9 +9,24 @@ import {
   getPerformance,
   getStreakAnalytics,
   getWeeklyAnalytics,
-} from "../api/analyticsApi";
+} from "../api/analyticsApi"; 
 
 const screenWidth = Dimensions.get("window").width;
+
+const getRecentWeekdayLabels = (count) => {
+  const labels = [];
+  const now = new Date();
+
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const date = new Date(now);
+    date.setDate(now.getDate() - i);
+    labels.push(
+      date.toLocaleDateString("en-US", { weekday: "short" })
+    );
+  }
+
+  return labels;
+};
 
 export default function AnalyticsScreen() {
 const navigation = useNavigation();
@@ -24,9 +39,7 @@ const [streak, setStreak] = useState(0);
 const [goalCompletion, setGoalCompletion] = useState(0);
 const [avgIntake, setAvgIntake] = useState(0);
 const [daysMetGoal, setDaysMetGoal] = useState(0);
-
-
-const goal = 2000;
+const [goalPerDay, setGoalPerDay] = useState(2000);
 
 useEffect(() => {
 loadAnalytics();
@@ -35,7 +48,12 @@ loadAnalytics();
 const loadAnalytics = async () => {
 
   try {
-    const [weeklyRes, monthlyRes, streakRes, performanceRes] = await Promise.all([
+    const [
+      weeklyRes,
+      monthlyRes,
+      streakRes,
+      performanceRes,
+    ] = await Promise.all([
       getWeeklyAnalytics(),
       getMonthlyAnalytics(),
       getStreakAnalytics(),
@@ -54,21 +72,27 @@ const loadAnalytics = async () => {
     const monthlySample = monthlyTotals.length
       ? [
           monthlyTotals[0] || 0,
-          monthlyTotals[4] || 0,
-          monthlyTotals[9] || 0,
-          monthlyTotals[14] || 0,
-          monthlyTotals[19] || 0,
-          monthlyTotals[24] || 0,
-          monthlyTotals[29] || monthlyTotals[monthlyTotals.length - 1] || 0,
+          monthlyTotals[5] || 0,
+          monthlyTotals[10] || 0,
+          monthlyTotals[15] || 0,
+          monthlyTotals[20] || 0,
+          monthlyTotals[25] || 0,
+          monthlyTotals[29] || 0,
         ]
       : [0, 0, 0, 0, 0, 0, 0];
     setMonthlyIntake(monthlySample);
 
+    const resolvedGoal =
+      Number(performanceRes?.data?.goalPerDay || 0) ||
+      Number(weeklyRes?.data?.goalPerDay || 0) ||
+      2000;
+
     const total = weeklyTotals.reduce((sum, value) => sum + value, 0);
     const average = Math.round(total / 7);
-    const metGoalDays = weeklyTotals.filter((value) => value >= goal).length;
+    const metGoalDays = weeklyTotals.filter((value) => value >= resolvedGoal).length;
 
     setAvgIntake(average);
+    setGoalPerDay(resolvedGoal);
     setGoalCompletion(Math.round(Number(performanceRes?.data?.performancePercent || 0)));
     setDaysMetGoal(metGoalDays);
     setStreak(Number(streakRes?.data?.streak || 0));
@@ -78,6 +102,7 @@ const loadAnalytics = async () => {
     setWeeklyIntake([0, 0, 0, 0, 0, 0, 0]);
     setMonthlyIntake([0, 0, 0, 0, 0, 0, 0]);
     setAvgIntake(0);
+    setGoalPerDay(2000);
     setGoalCompletion(0);
     setDaysMetGoal(0);
     setStreak(0);
@@ -91,23 +116,13 @@ useFocusEffect(
 );
 
 const weeklyData = {
-labels: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
+labels: getRecentWeekdayLabels(7),
 datasets: [{ data: weeklyIntake }],
 };
 
 const monthlyData = {
-labels: ["1","5","10","15","20","25","30"],
+labels: ["-29d","-24d","-19d","-14d","-9d","-4d","Today"],
 datasets: [{ data: monthlyIntake }],
-};
-
-const trendData = {
-labels: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
-datasets: [
-{
-data: weeklyIntake,
-strokeWidth: 3,
-},
-],
 };
 
 const handleBack = () => {
@@ -207,77 +222,66 @@ return (
           {daysMetGoal}
         </Text>
         <Text style={styles.cardLabel}>
-          Days Met Goal
+          Days Met Goal ({goalPerDay} ml)
         </Text>
       </View>
 
     </View>
 
-    {/* BAR CHART */}
+    {/* WEEKLY BAR / MONTHLY CHART */}
     <View style={styles.chartCard}>
 
       <Text style={styles.chartTitle}>
         {activeTab === "weekly"
-          ? "Last 7 Days"
-          : "Last 30 Days"}
+          ? "Weekly Graph"
+          : "Monthly Chart"}
       </Text>
 
-      <BarChart
-        data={
-          activeTab === "weekly"
-            ? weeklyData
-            : monthlyData
-        }
-        width={screenWidth - 80}
-        height={180}
-        yAxisSuffix="ml"
-        chartConfig={{
-          backgroundGradientFrom: "#f3f4f6",
-          backgroundGradientTo: "#f3f4f6",
-          decimalPlaces: 0,
-          color: (opacity = 1) =>
-            `rgba(59,130,246, ${opacity})`,
-          labelColor: () => "#6b7280",
-        }}
-        style={{
-          marginTop: 10,
-          borderRadius: 16,
-        }}
-      />
-
-    </View>
-
-    {/* TREND CHART */}
-    <View style={styles.chartCard}>
-
-      <Text style={styles.chartTitle}>
-        Hydration Trend
-      </Text>
-
-      <LineChart
-        data={trendData}
-        width={screenWidth - 80}
-        height={180}
-        yAxisSuffix="ml"
-        chartConfig={{
-          backgroundGradientFrom: "#f3f4f6",
-          backgroundGradientTo: "#f3f4f6",
-          decimalPlaces: 0,
-          color: (opacity = 1) =>
-            `rgba(59,130,246, ${opacity})`,
-          labelColor: () => "#6b7280",
-          propsForDots: {
-            r: "4",
-            strokeWidth: "2",
-            stroke: "#3b82f6",
-          },
-        }}
-        bezier
-        style={{
-          marginTop: 10,
-          borderRadius: 16,
-        }}
-      />
+      {activeTab === "weekly" ? (
+        <BarChart
+          data={weeklyData}
+          width={screenWidth - 80}
+          height={180}
+          yAxisSuffix="ml"
+          chartConfig={{
+            backgroundGradientFrom: "#f3f4f6",
+            backgroundGradientTo: "#f3f4f6",
+            decimalPlaces: 0,
+            color: (opacity = 1) =>
+              `rgba(59,130,246, ${opacity})`,
+            labelColor: () => "#6b7280",
+          }}
+          style={{
+            marginTop: 10,
+            borderRadius: 16,
+          }}
+        />
+      ) : (
+        <LineChart
+          data={monthlyData}
+          width={screenWidth - 80}
+          height={180}
+          yAxisSuffix="ml"
+          chartConfig={{
+            backgroundGradientFrom: "#f3f4f6",
+            backgroundGradientTo: "#f3f4f6",
+            decimalPlaces: 0,
+            color: (opacity = 1) =>
+              `rgba(59,130,246, ${opacity})`,
+            labelColor: () => "#6b7280",
+            propsForDots: {
+              r: "4",
+              strokeWidth: "2",
+              stroke: "#3b82f6",
+            },
+          }}
+          bezier
+          style={{
+            marginTop: 10,
+            borderRadius: 16,
+          }}
+        />
+      )}
 
     </View>
 
@@ -390,6 +394,7 @@ fontWeight: "700",
 
 insightBox: {
 margin: 20,
+marginTop: 50,
 padding: 20,
 borderRadius: 18,
 backgroundColor: "#3b82f6",

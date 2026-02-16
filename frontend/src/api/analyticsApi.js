@@ -16,3 +16,6 @@ export const getPerformance = () => {
   return axiosInstance.get("/analytics/performance");
 };
 
+export const getTrendAnalytics = (range = "week") => {
+  return axiosInstance.get(`/analytics/trend?range=${range}`);
+};

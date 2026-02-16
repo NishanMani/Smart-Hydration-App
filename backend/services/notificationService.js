@@ -1,13 +1,35 @@
 import admin from "firebase-admin";    //Firebase’s backend SDK
-import serviceAccount from "../firebaseServiceKey.json" assert { type: "json" };
+import fs from "fs";
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+let isFirebaseReady = false;
+
+try {
+  const keyUrl = new URL("../firebaseServiceKey.json", import.meta.url);
+  if (fs.existsSync(keyUrl)) {
+    const serviceAccount = JSON.parse(
+      fs.readFileSync(keyUrl, "utf8")
+    );
+
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    }
+    isFirebaseReady = true;
+  } else {
+    console.warn(
+      "FCM key not found at backend/firebaseServiceKey.json. Push notifications are disabled."
+    );
+  }
+} catch (error) {
+  console.error("FCM init error:", error.message);
 }
 
 export const sendPushNotification = async (token, title, body) => {       //dev tok,notifi tit,content gets from reminderCron
+  if (!isFirebaseReady || !token) {
+    return false;
+  }
+
   try {
     await admin.messaging().send({            //BE sends to FB and it sends to FE
       token,
@@ -16,7 +38,9 @@ export const sendPushNotification = async (token, title, body) => {       //dev 
         body,
       },
     });
+    return true;
   } catch (error) {
     console.error("FCM Error:", error.message);
+    return false;
   }
 };
