@@ -52,6 +52,7 @@ export const calculateHydrationGoal = (data = {}) => {
   let result = Math.round(baseIntake);
 
   if (unit === "oz") result = Math.round(result / 29.5735);
+  console.log(result)
 
   return result;
 };

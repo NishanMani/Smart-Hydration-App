@@ -38,6 +38,7 @@ export const sendPushNotification = async (token, title, body) => {       //dev 
         body,
       },
     });
+    console.log(notification,title)
     return true;
   } catch (error) {
     console.error("FCM Error:", error.message);
