@@ -148,20 +148,28 @@ export default function AuthScreen() {
         const onboardingKey = currentUserId
           ? `onboardingCompleted:${currentUserId}`
           : "onboardingCompleted";
-        const onboardingDone = await AsyncStorage.getItem(onboardingKey);
+        const [onboardingDone, legacyOnboardingDone] = await Promise.all([
+          AsyncStorage.getItem(onboardingKey),
+          AsyncStorage.getItem("onboardingCompleted"),
+        ]);
         const hasGoalFromServer = Number(user?.dailyGoal || 0) > 0;
+        const isOnboardingDone = onboardingDone === "true" || legacyOnboardingDone === "true";
 
         if (hasGoalFromServer) {
           await AsyncStorage.setItem(onboardingKey, "true");
           navigation.replace("Dashboard");
-        } else if (!onboardingDone) {
+        } else if (!isOnboardingDone) {
           navigation.replace("Onboarding");
         } else {
           navigation.replace("Dashboard");
         }
       }
     } catch (e) {
-      Alert.alert("Auth Error", e.response?.data?.message || "Something went wrong");
+      const backendMessage =
+        e?.response?.data?.message ||
+        e?.response?.data?.errors?.[0]?.msg ||
+        "Something went wrong";
+      Alert.alert("Auth Error", backendMessage);
     } finally {
       setIsSubmitting(false);
     }

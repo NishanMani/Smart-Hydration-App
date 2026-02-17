@@ -3,17 +3,39 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 let Device = null;
 let Notifications = null;
+let Constants = null;
 
 try {
-  Device = require("expo-device");
-  Notifications = require("expo-notifications");
+  Constants = require("expo-constants").default;
 } catch (error) {
-  // Notification modules are optional at runtime until dependencies are installed.
+  // Expo constants are optional at runtime.
 }
 
 const PUSH_TOKEN_KEY = "devicePushToken";
+const EXPO_PUSH_TOKEN_KEY = "expoPushToken";
 
 let isNotificationHandlerReady = false;
+
+const detectExpoGo = () => {
+  const executionEnvironment = Constants?.executionEnvironment;
+  if (executionEnvironment === "storeClient") {
+    return true;
+  }
+
+  return Constants?.appOwnership === "expo";
+};
+const isExpoGoRuntime = detectExpoGo();
+
+if (!isExpoGoRuntime) {
+  try {
+    Device = require("expo-device");
+    Notifications = require("expo-notifications");
+  } catch (error) {
+    // Notification modules are optional at runtime until dependencies are installed.
+  }
+}
+
+const isExpoGo = () => isExpoGoRuntime;
 
 const requestNotificationPermission = async () => {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -29,6 +51,7 @@ const requestNotificationPermission = async () => {
 
 export const initializeNotifications = async () => {
   if (!Notifications) return;
+  if (isExpoGo()) return;
   if (isNotificationHandlerReady) return;
 
   Notifications.setNotificationHandler({
@@ -53,6 +76,9 @@ export const initializeNotifications = async () => {
 
 export const getPushTokenForBackend = async () => {
   if (!Notifications || !Device) {
+    return null;
+  }
+  if (isExpoGo()) {
     return null;
   }
 
@@ -86,4 +112,40 @@ export const getPushTokenForBackend = async () => {
 
 export const getCachedPushToken = async () => {
   return AsyncStorage.getItem(PUSH_TOKEN_KEY);
+};
+
+export const getExpoPushTokenForTesting = async () => {
+  if (!Notifications || !Device) {
+    return null;
+  }
+
+  if (!Device.isDevice) {
+    return null;
+  }
+
+  const hasPermission = await requestNotificationPermission();
+  if (!hasPermission) {
+    return null;
+  }
+
+  try {
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ||
+      Constants?.easConfig?.projectId;
+
+    const tokenResult = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
+
+    const token = typeof tokenResult?.data === "string" ? tokenResult.data : null;
+
+    if (token) {
+      await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
+      return token;
+    }
+  } catch (error) {
+    // Ignore token fetch errors and fallback to cached token.
+  }
+
+  return AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
 };

@@ -14,10 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getReminder, setReminder } from "../api/reminderApi";
-import {
-  getCachedPushToken,
-  getPushTokenForBackend,
-} from "../services/notificationService";
+import { getPushTokenForBackend } from "../services/notificationService";
 
 export default function ReminderScreen() {
   const navigation = useNavigation();
@@ -33,12 +30,9 @@ export default function ReminderScreen() {
   const [sleepEndTime, setSleepEndTime] = useState(new Date());
   const [showSleepStart, setShowSleepStart] = useState(false);
   const [showSleepEnd, setShowSleepEnd] = useState(false);
-  const [pushToken, setPushToken] = useState("");
-  const [isRefreshingToken, setIsRefreshingToken] = useState(false);
 
   useEffect(() => {
     loadSettings();
-    loadCachedToken();
   }, []);
 
   const intervals = ["30 minutes", "1 hour", "1.5 hours", "2 hours", "3 hours"];
@@ -167,27 +161,6 @@ export default function ReminderScreen() {
       Alert.alert("Saved", "Reminder settings saved");
     } catch (error) {
       console.log(error);
-    }
-  };
-
-  const loadCachedToken = async () => {
-    const token = await getCachedPushToken().catch(() => null);
-    setPushToken(token || "");
-  };
-
-  const refreshToken = async () => {
-    setIsRefreshingToken(true);
-    try {
-      const token = await getPushTokenForBackend().catch(() => null);
-      setPushToken(token || "");
-      Alert.alert(
-        "Push Token",
-        token
-          ? "FCM token captured on this device."
-          : "No token found. Check permissions/device build."
-      );
-    } finally {
-      setIsRefreshingToken(false);
     }
   };
 
@@ -391,22 +364,6 @@ export default function ReminderScreen() {
           <Text style={styles.saveText}>Save Settings</Text>
         </TouchableOpacity>
 
-        <View style={styles.debugCard}>
-          <Text style={styles.debugTitle}>Push Token Debug</Text>
-          <Text style={styles.debugToken}>
-            {pushToken || "No token cached yet"}
-          </Text>
-          <TouchableOpacity
-            style={[styles.debugBtn, isRefreshingToken && styles.debugBtnDisabled]}
-            onPress={refreshToken}
-            disabled={isRefreshingToken}
-          >
-            <Text style={styles.debugBtnText}>
-              {isRefreshingToken ? "Refreshing..." : "Refresh Token"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {showSleepStart && (
           <DateTimePicker
             value={sleepStartTime}
@@ -591,40 +548,5 @@ const styles = StyleSheet.create({
   saveText: {
     color: "#fff",
     fontWeight: "700",
-  },
-
-  debugCard: {
-    backgroundColor: "#f3f4f6",
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 14,
-    borderRadius: 12,
-  },
-
-  debugTitle: {
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-
-  debugToken: {
-    color: "#374151",
-    fontSize: 12,
-    marginBottom: 10,
-  },
-
-  debugBtn: {
-    backgroundColor: "#111827",
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-
-  debugBtnDisabled: {
-    opacity: 0.6,
-  },
-
-  debugBtnText: {
-    color: "#fff",
-    fontWeight: "600",
   },
 });

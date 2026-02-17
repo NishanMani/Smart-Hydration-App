@@ -31,9 +31,9 @@ const toEndOfDay = (value) => {
 
 const formatDateKey = (value) => {
   const date = new Date(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
@@ -392,7 +392,27 @@ export const getHistoryInsights = async (req, res) => {
     const { thisMonthTotal, lastMonthTotal, percentChange } =
       getMonthlyPercentChange(currentMonthTotalResult, previousMonthTotalResult);
 
+<<<<<<< HEAD
     const streak = getCurrentStreak(streakDailyTotals, goalPerDay, ranges.now);
+=======
+    const streakMap = streakDailyTotals.reduce((acc, item) => {
+      acc[item._id] = Number(item.totalIntake || 0);
+      return acc;
+    }, {});
+    let streak = 0;
+    const cursor = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    );
+    while (true) {
+      const key = formatDateKey(cursor);
+      if (Number(streakMap[key] || 0) >= goalPerDay) {
+        streak += 1;
+        cursor.setDate(cursor.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+>>>>>>> 7a85765ef48d09587ab8cd8286b01b67854bb060
 
     res.status(200).json({
       success: true,

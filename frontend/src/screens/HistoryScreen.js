@@ -20,6 +20,8 @@ import {
   getHistoryInsights,
   updateWaterLog as updateWaterLogApi,
 } from "../api/waterApi";
+import { getUserProfile } from "../api/userApi";
+import { normalizeUnit, toDisplayAmount, toMlAmount } from "../utils/unit";
 
 export default function HistoryScreen() {
 
@@ -38,6 +40,7 @@ export default function HistoryScreen() {
   });
   const [streak, setStreak] = useState(0);
   const [badge, setBadge] = useState("Start Your Journey 💧");
+  const [unit, setUnit] = useState("ml");
   const [editVisible, setEditVisible] = useState(false);
   const [editAmount, setEditAmount] = useState("");
   const [editingItem, setEditingItem] = useState(null);
@@ -161,9 +164,15 @@ export default function HistoryScreen() {
 
   const loadHistory = useCallback(async () => {
     try {
-      const res = await getHistoryInsights({
-        limit: MAX_HISTORY_ITEMS,
-      }).catch(() => null);
+      const [res, profileRes, localProfileRaw] = await Promise.all([
+        getHistoryInsights({
+          limit: MAX_HISTORY_ITEMS,
+        }).catch(() => null),
+        getUserProfile().catch(() => null),
+        AsyncStorage.getItem("userProfile"),
+      ]);
+      const localProfile = localProfileRaw ? JSON.parse(localProfileRaw) : null;
+      setUnit(normalizeUnit(profileRes?.data?.unit || localProfile?.unit));
 
       if (res?.data?.success) {
         const serverLogs = sanitizeLogs(res.data.logs || []);
@@ -300,9 +309,9 @@ export default function HistoryScreen() {
   const openEditLog = useCallback((index, item) => {
     setEditingIndex(index);
     setEditingItem(item);
-    setEditAmount(String(item?.amount || ""));
+    setEditAmount(String(toDisplayAmount(item?.amount || 0, unit)));
     setEditVisible(true);
-  }, []);
+  }, [unit]);
 
   const saveEditedLog = useCallback(async () => {
     const parsedAmount = Number(editAmount);
@@ -310,22 +319,24 @@ export default function HistoryScreen() {
       Alert.alert("Error", "Enter a valid amount");
       return;
     }
+    const parsedAmountMl = toMlAmount(parsedAmount, unit);
 
     try {
-      const hasServerId =
-        typeof editingItem?.id === "string" &&
-        /^[a-fA-F0-9]{24}$/.test(editingItem.id);
+      const hasServerId = Boolean(editingItem?.id);
       if (hasServerId) {
-        const updated = await updateWaterLogApi(editingItem.id, parsedAmount)
-          .then(() => true)
-          .catch(() => false);
-
-        if (updated) {
+        try {
+          await updateWaterLogApi(editingItem.id, parsedAmountMl);
           setEditVisible(false);
           setEditingItem(null);
           setEditingIndex(-1);
           setEditAmount("");
           await loadHistory();
+          return;
+        } catch (error) {
+          Alert.alert(
+            "Update Failed",
+            error?.response?.data?.message || "Unable to update log on server"
+          );
           return;
         }
       }
@@ -338,7 +349,7 @@ export default function HistoryScreen() {
       if (editingIndex < 0 || editingIndex >= existingLogs.length) return;
 
       const updatedLogs = existingLogs.map((log, idx) =>
-        idx === editingIndex ? { ...log, amount: parsedAmount } : log
+        idx === editingIndex ? { ...log, amount: parsedAmountMl } : log
       );
 
       const today = new Date().toDateString();
@@ -380,6 +391,7 @@ export default function HistoryScreen() {
     editAmount,
     editingIndex,
     editingItem,
+    unit,
     loadHistory,
     sanitizeLogs,
     goal,
@@ -409,6 +421,7 @@ export default function HistoryScreen() {
   };
 
   const groupedLogs = useMemo(() => groupByDate(), [logs]);
+  const unitLabel = normalizeUnit(unit);
   const sortedDates = useMemo(() => {
     const toTimestamp = (value) => {
       if (!value || value === "Today") return new Date().setHours(0, 0, 0, 0);
@@ -439,7 +452,7 @@ const exportPDF = async () => {
         <tr>
           <th>Date</th>
           <th>Time</th>
-          <th>Amount (ml)</th>
+          <th>Amount (${unitLabel})</th>
         </tr>
         ${logs
           .map(
@@ -447,7 +460,7 @@ const exportPDF = async () => {
           <tr>
             <td>${log.date}</td>
             <td>${log.time}</td>
-            <td>${log.amount}</td>
+            <td>${toDisplayAmount(log.amount, unitLabel)}</td>
           </tr>
         `
           )
@@ -458,7 +471,7 @@ const exportPDF = async () => {
         ${Object.keys(totals)
           .map(
             (date) => `
-          <li>${date} → ${totals[date]} ml</li>
+          <li>${date} → ${toDisplayAmount(totals[date], unitLabel)} ${unitLabel}</li>
         `
           )
           .join("")}
@@ -577,7 +590,7 @@ const exportPDF = async () => {
   </Text>
 
   <Text style={styles.weekValue}>
-    {weeklyStats.avgIntake} ml / day
+    {toDisplayAmount(weeklyStats.avgIntake, unitLabel)} {unitLabel} / day
   </Text>
 
   <View style={styles.progressBar}>
@@ -616,7 +629,7 @@ const exportPDF = async () => {
       </Text>
 
       <Text style={styles.monthValue}>
-        {monthlyStats.thisMonthTotal} ml
+        {toDisplayAmount(monthlyStats.thisMonthTotal, unitLabel)} {unitLabel}
       </Text>
     </View>
 
@@ -626,7 +639,7 @@ const exportPDF = async () => {
       </Text>
 
       <Text style={styles.monthValue}>
-        {monthlyStats.lastMonthTotal} ml
+        {toDisplayAmount(monthlyStats.lastMonthTotal, unitLabel)} {unitLabel}
       </Text>
     </View>
 
@@ -711,11 +724,14 @@ const exportPDF = async () => {
   {/* DAILY TOTAL */}
 
   <Text style={styles.totalText}>
-    {groupedLogs[date]
+    {toDisplayAmount(
+      groupedLogs[date]
       .reduce(
         (sum, item) => sum + item.amount,
         0
-      )} ml
+      ),
+      unitLabel
+    )} {unitLabel}
   </Text>
 
   {/* BADGE */}
@@ -773,7 +789,7 @@ const exportPDF = async () => {
 
                   <View>
                     <Text style={styles.amount}>
-                      {item.amount} ml
+                      {toDisplayAmount(item.amount, unitLabel)} {unitLabel}
                     </Text>
 
                     <Text style={styles.time}>
@@ -844,7 +860,7 @@ const exportPDF = async () => {
               value={editAmount}
               onChangeText={setEditAmount}
               keyboardType="numeric"
-              placeholder="Enter amount in ml"
+              placeholder={`Enter amount in ${unitLabel}`}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity

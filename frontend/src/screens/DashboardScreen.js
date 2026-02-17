@@ -22,6 +22,7 @@ import {
   deleteWaterLog as deleteWaterLogApi,
   getDailySummary,
 } from "../api/waterApi";
+import { normalizeUnit, toDisplayAmount, toMlAmount } from "../utils/unit";
 
 
 export default function DashboardScreen() {
@@ -36,6 +37,7 @@ export default function DashboardScreen() {
   const [streak, setStreak] = useState(0);
   const [lastCompletedDate, setLastCompletedDate] = useState(null);
   const [profileName, setProfileName] = useState("User");
+  const [unit, setUnit] = useState("ml");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [customAmount, setCustomAmount] = useState("");
@@ -50,6 +52,10 @@ export default function DashboardScreen() {
 
   const safeGoal = Number(goal) > 0 ? Number(goal) : 1;
   const fill = Math.min((intake / safeGoal) * 100, 100);
+  const unitLabel = normalizeUnit(unit);
+  const displayGoal = toDisplayAmount(goal, unitLabel);
+  const displayIntake = toDisplayAmount(intake, unitLabel);
+  const displayRemaining = toDisplayAmount(Math.max(goal - intake, 0), unitLabel);
 
   //useEffect
   useEffect(() => {
@@ -128,7 +134,22 @@ const checkStreak = () => {
 
   if (lastCompletedDate === today) return;
 
-  setStreak((prev) => prev + 1);
+  if (!lastCompletedDate) {
+    setStreak(1);
+    setLastCompletedDate(today);
+    return;
+  }
+
+  const lastDate = new Date(lastCompletedDate);
+  const todayDate = new Date(today);
+  const dayDiff = Math.floor((todayDate - lastDate) / (24 * 60 * 60 * 1000));
+
+  if (dayDiff === 1) {
+    setStreak((prev) => prev + 1);
+  } else {
+    setStreak(1);
+  }
+
   setLastCompletedDate(today);
 };
 
@@ -162,20 +183,21 @@ const checkStreak = () => {
 
 //addcustomwater
 
-  const addCustomWater = async () => {
+const addCustomWater = async () => {
   if (!customAmount) return;
 
-  const amount = parseInt(customAmount, 10);
+  const amount = Number(customAmount);
   if (Number.isNaN(amount) || amount <= 0) return;
+  const amountInMl = toMlAmount(amount, unitLabel);
 
   try {
-    await addWaterLogApi(amount);
+    await addWaterLogApi(amountInMl);
     await loadHydrationData();
   } catch (e) {
     console.log(e);
 
     setIntake((prev) =>
-      Math.min(prev + amount, goal)
+      Math.min(prev + amountInMl, goal)
     );
 
     const time = new Date().toLocaleTimeString([], {
@@ -185,7 +207,7 @@ const checkStreak = () => {
 
     setLogs((prev) => [
       ...prev,
-      { amount, time, date: new Date().toDateString() },
+      { amount: amountInMl, time, date: new Date().toDateString() },
     ]);
   }
 
@@ -232,6 +254,7 @@ const loadHydrationData = async () => {
 
       const parsedProfile = JSON.parse(localProfile);
       setProfileName(parsedProfile?.name?.trim() || "User");
+      setUnit(normalizeUnit(parsedProfile?.unit));
     };
 
     const summaryRes = await getDailySummary().catch(() => null);
@@ -256,6 +279,7 @@ const loadHydrationData = async () => {
       ]);
       const localParsed = local ? JSON.parse(local) : {};
       await syncProfileName(profileRes?.data);
+      setUnit(normalizeUnit(profileRes?.data?.unit));
       const serverGoal = Number(profileRes?.data?.dailyGoal || 0);
       const localGoal = Number(localParsed.goal || 2772);
       const selectedGoal = serverGoal > 0 ? serverGoal : localGoal;
@@ -273,6 +297,9 @@ const loadHydrationData = async () => {
 
     const parsed = JSON.parse(data);
     await syncProfileName();
+    const localProfile = await AsyncStorage.getItem("userProfile");
+    const parsedProfile = localProfile ? JSON.parse(localProfile) : null;
+    setUnit(normalizeUnit(parsedProfile?.unit));
     const today = new Date().toDateString();
     const todayLogs = (parsed.logs || []).filter((log) => log.date === today);
     const parsedGoal = Number(parsed.goal || 2772);
@@ -351,11 +378,11 @@ useFocusEffect(
             </AnimatedCircularProgress>
 
             <Text style={styles.intake}>
-              {intake} / {goal} ml
+              {displayIntake} / {displayGoal} {unitLabel}
             </Text>
 
             <Text style={styles.remaining}>
-              {Math.max(goal - intake, 0)} ml to go
+              {displayRemaining} {unitLabel} to go
             </Text>
 
           </View>
@@ -373,8 +400,8 @@ useFocusEffect(
                 onPress={() => addWater(amt)}
               >
                 <Text style={styles.drop}>💧</Text>
-                <Text style={styles.quickAmt}>{amt}</Text>
-                <Text style={styles.quickUnit}>ml</Text>
+                <Text style={styles.quickAmt}>{toDisplayAmount(amt, unitLabel)}</Text>
+                <Text style={styles.quickUnit}>{unitLabel}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -405,7 +432,7 @@ useFocusEffect(
   <View key={index} style={styles.logRow}>
 
     <Text style={styles.logAmt}>
-      💧 {log.amount} ml
+      💧 {toDisplayAmount(log.amount, unitLabel)} {unitLabel}
     </Text>
 
     <View style={styles.logRight}>
@@ -472,7 +499,7 @@ useFocusEffect(
       </Text>
 
       <TextInput
-        placeholder="Enter ml"
+        placeholder={`Enter ${unitLabel}`}
         keyboardType="numeric"
         value={customAmount}
         onChangeText={setCustomAmount}
