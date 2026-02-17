@@ -89,7 +89,14 @@ export const getHistoryInsights = async (req, res) => {
       { $match: { userId, date: { $gte: from, $lte: to } } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+          _id: { 
+              $dateToString: { 
+                format: "%Y-%m-%d", 
+                date: "$date",
+                timezone: "Asia/Kolkata"
+              } 
+            },
+
           totalIntake: { $sum: "$amount" },
           logsCount: { $sum: 1 },
         },
@@ -104,7 +111,14 @@ export const getHistoryInsights = async (req, res) => {
       { $match: { userId, date: { $gte: last90Days } } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+          _id: { 
+            $dateToString: { 
+              format: "%Y-%m-%d", 
+              date: "$date",
+              timezone: "Asia/Kolkata"
+            } 
+          },
+
           totalIntake: { $sum: "$amount" },
         },
       },
@@ -120,7 +134,7 @@ export const getHistoryInsights = async (req, res) => {
     today.setHours(0, 0, 0, 0);
 
     while (true) {
-      const key = today.toISOString().split("T")[0];
+      const key = today.toLocaleDateString("en-CA");
       if ((streakMap[key] || 0) >= goalPerDay) {
         streak++;
         today.setDate(today.getDate() - 1);
@@ -129,7 +143,6 @@ export const getHistoryInsights = async (req, res) => {
       }
     }
 
-    // ================= BADGE =================
     let badge = "Start Your Journey";
     if (streak >= 30) badge = "Hydration Champion";
     else if (streak >= 14) badge = "Hydration Pro";

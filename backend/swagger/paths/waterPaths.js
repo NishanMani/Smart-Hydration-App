@@ -12,7 +12,6 @@ export const waterPaths = {
               type: "object",
               properties: {
                 amount: { type: "number" },
-                timestamp: { type: "string", format: "date-time" },
               },
               required: ["amount"],
             },
@@ -45,7 +44,6 @@ export const waterPaths = {
               type: "object",
               properties: {
                 amount: { type: "number" },
-                timestamp: { type: "string", format: "date-time" },
               },
             },
           },
@@ -89,8 +87,95 @@ export const waterPaths = {
       tags: ["Water"],
       summary: "Get water history insights",
       security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "query",
+          name: "from",
+          required: false,
+          schema: { type: "string", format: "date" },
+          description: "Start date in YYYY-MM-DD format",
+        },
+        {
+          in: "query",
+          name: "to",
+          required: false,
+          schema: { type: "string", format: "date" },
+          description: "End date in YYYY-MM-DD format",
+        },
+        {
+          in: "query",
+          name: "page",
+          required: false,
+          schema: { type: "integer", minimum: 1, default: 1 },
+        },
+        {
+          in: "query",
+          name: "limit",
+          required: false,
+          schema: { type: "integer", minimum: 1, maximum: 1000, default: 100 },
+        },
+      ],
       responses: {
-        200: { description: "History insights" },
+        200: {
+          description: "History insights",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean", example: true },
+                  pagination: {
+                    type: "object",
+                    properties: {
+                      page: { type: "integer" },
+                      limit: { type: "integer" },
+                      totalLogs: { type: "integer" },
+                      totalPages: { type: "integer" },
+                    },
+                  },
+                  goalPerDay: { type: "number" },
+                  logs: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        _id: { type: "string" },
+                        userId: { type: "string" },
+                        amount: { type: "number" },
+                        date: { type: "string", format: "date-time" },
+                        createdAt: { type: "string", format: "date-time" },
+                        updatedAt: { type: "string", format: "date-time" },
+                      },
+                    },
+                  },
+                  dailyTotals: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        _id: { type: "string", example: "2026-02-17" },
+                        totalIntake: { type: "number" },
+                        logsCount: { type: "integer" },
+                      },
+                    },
+                  },
+                  insights: {
+                    type: "object",
+                    properties: {
+                      streak: {
+                        type: "object",
+                        properties: {
+                          current: { type: "integer" },
+                          badge: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     },
   },

@@ -44,6 +44,19 @@ export const analyticsPaths = {
       tags: ["Analytics"],
       summary: "Get trend analytics",
       security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "query",
+          name: "range",
+          required: false,
+          schema: {
+            type: "string",
+            enum: ["week", "month"],
+            default: "week",
+          },
+          description: "Returns weekly trend by default, or monthly trend when range=month",
+        },
+      ],
       responses: {
         200: { description: "Trend analytics" },
       },

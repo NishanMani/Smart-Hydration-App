@@ -97,8 +97,59 @@ export const authPaths = {
         },
       },
       responses: {
-        200: { description: "Login successful" },
-        401: { description: "Invalid credentials" },
+        200: {
+          description: "Login successful",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean", example: true },
+                  accessToken: { type: "string" },
+                  refreshToken: { type: "string" },
+                  user: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string" },
+                      name: { type: "string" },
+                      email: { type: "string", format: "email" },
+                      role: { type: "string", nullable: true },
+                      dailyGoal: { type: "number" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {
+          description: "Invalid credentials",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean", example: false },
+                  message: { type: "string", example: "Invalid email or password" },
+                },
+              },
+            },
+          },
+        },
+        500: {
+          description: "Server error",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean", example: false },
+                  message: { type: "string", example: "Internal server error" },
+                },
+              },
+            },
+          },
+        },
       },
     },
   },

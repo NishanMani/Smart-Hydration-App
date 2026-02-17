@@ -186,3 +186,37 @@ export const toggleSleepMode = async (req, res) => {
     sendServerError(res, error);
   }
 };
+
+export const saveFcmToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: "Token is required" });
+    }
+
+    const reminder = await Reminder.findOneAndUpdate(
+      { userId: req.user.id },
+      {
+        $set: { fcmToken: token },
+        $setOnInsert: {
+          interval: DEFAULT_INTERVAL,
+          startTime: DEFAULT_START_TIME,
+          endTime: DEFAULT_END_TIME,
+          sleepStartTime: DEFAULT_SLEEP_START,
+          sleepEndTime: DEFAULT_SLEEP_END,
+          activityLevel: DEFAULT_ACTIVITY_LEVEL,
+          isActive: true,
+          isPaused: false,
+          sleepMode: false,
+          pauseDurationMinutes: DEFAULT_PAUSE_DURATION,
+        },
+      },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    res.json({ message: "Token saved", reminder });
+  } catch (error) {
+    sendServerError(res, error);
+  }
+};

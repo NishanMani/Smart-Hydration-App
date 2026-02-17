@@ -36,7 +36,7 @@ app.use('/api/analytics',analyticsRoutes)
 app.use('/api/reminder',reminderRoutes)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
-const PORT =  5000 || process.env.PORT
+const PORT =  process.env.PORT || 5000
 
 app.listen(PORT, () => {
 console.log(`Server is running on http://localhost:${PORT}`)

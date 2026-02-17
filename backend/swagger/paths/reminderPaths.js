@@ -14,6 +14,16 @@ export const reminderPaths = {
                 interval: { type: "number" },
                 startTime: { type: "string" },
                 endTime: { type: "string" },
+                sleepStartTime: { type: "string", example: "22:00" },
+                sleepEndTime: { type: "string", example: "06:00" },
+                fcmToken: { type: "string" },
+                activityLevel: {
+                  type: "string",
+                  enum: ["Sedentary", "Light", "Moderate", "Active", "Very Active"],
+                },
+                isActive: { type: "boolean" },
+                isPaused: { type: "boolean" },
+                pauseDurationMinutes: { type: "number", example: 60 },
                 sleepMode: { type: "boolean" },
               },
             },
@@ -47,9 +57,9 @@ export const reminderPaths = {
             schema: {
               type: "object",
               properties: {
-                paused: { type: "boolean" },
+                isPaused: { type: "boolean" },
+                pauseDurationMinutes: { type: "number", minimum: 1, example: 60 },
               },
-              required: ["paused"],
             },
           },
         },
@@ -80,6 +90,31 @@ export const reminderPaths = {
       },
       responses: {
         200: { description: "Sleep mode updated" },
+      },
+    },
+  },
+  "/api/reminder/fcm-token": {
+    put: {
+      tags: ["Reminder"],
+      summary: "Save FCM token for reminder notifications",
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                token: { type: "string" },
+              },
+              required: ["token"],
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "FCM token saved" },
+        400: { description: "Token is required" },
       },
     },
   },
