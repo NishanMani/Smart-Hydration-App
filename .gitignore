@@ -1,4 +1,5 @@
-backend/config/firebaseSeviceKey.json
+# Firebase Admin key
+backend/config/firebaseServiceKey.json
 node_modules/
 .env
 backend/node_modules/
