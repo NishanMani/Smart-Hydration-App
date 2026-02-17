@@ -3,12 +3,13 @@ import dotenv from 'dotenv'
 import cors from 'cors'
 import { connectDB } from './config/db.js'
 import cookieParser from 'cookie-parser'
-import session from "express-session";
 import authRoutes from './routes/authRoutes.js'
 import userRoutes from './routes/userRoutes.js'
 import waterRoutes from './routes/waterLogRoutes.js'
 import reminderRoutes from './routes/reminderRoutes.js'
 import analyticsRoutes from './routes/analyticsRoutes.js'
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./swagger/index.js";
 import './cron/reminderCron.js';
 
 dotenv.config()
@@ -25,18 +26,6 @@ app.use(
   })
 );
 
-app.use(
-  session({                           //Encrypt and sign session ID
-    secret: process.env.SESSION_SECRET,
-    resave: false,                    //Don’t save session again if nothing changed.
-    saveUninitialized: false,         //Don’t create session until something stored.
-    cookie: {
-      httpOnly: true,
-      secure: false, 
-      maxAge: 24 * 60 * 60 * 1000
-    }
-  })
-);
 app.get('/', (req, res) => {
   res.send('API is running...')
 })  
@@ -45,6 +34,7 @@ app.use('/api/user', userRoutes)
 app.use('/api/water',waterRoutes)
 app.use('/api/analytics',analyticsRoutes)
 app.use('/api/reminder',reminderRoutes)
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
 const PORT =  5000 || process.env.PORT
 

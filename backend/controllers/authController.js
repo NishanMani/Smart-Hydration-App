@@ -46,22 +46,24 @@ export const refreshAccessToken = async (req, res) => {
 
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
 
+    const {name,email,password,weight,height,age,gender,activityLevel,climate,lifestyle,dailyGoal,unit,pregnant,breastfeeding} = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser)
+      return res.status(400).json({success:false,message:"Email already registered"});
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    await User.create({
-      name,
-      email,
-      password: hashedPassword
+    // const user = await User.create({name,email,password:hashedPassword,weight,height,age,gender,activityLevel,climate,lifestyle,dailyGoal,unit,pregnant,breastfeeding});
+    const user = await User.create({
+      ...req.body,
+      password: hashedPassword,
+      dailyGoal: calculateHydrationGoal(req.body)
     });
 
-    res.status(201).json({
-      success: true,
-      message: "User registered successfully",
-    });
+    res.status(201).json({success:true,message:"User registered successfully",userId:user._id});
+
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(500).json({success:false,message:err.message});
   }
 };
 

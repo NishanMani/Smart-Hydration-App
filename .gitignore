@@ -1,3 +1,4 @@
 backend/config/firebaseSeviceKey.json
 node_modules/
 .env
+backend/node_modules/
