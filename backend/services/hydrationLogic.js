@@ -7,8 +7,6 @@ export const calculateHydrationGoal = (data = {}) => {
     activityLevel = "",
     climate = "",
     specialCondition = "",
-    pregnant = false,
-    breastfeeding = false,
     lifestyle = "",
     unit = "ml"
   } = data;
@@ -41,8 +39,8 @@ export const calculateHydrationGoal = (data = {}) => {
     case "Cold": baseIntake += 100; break;
   }
 
-  if (specialCondition === "Pregnant" || pregnant) baseIntake += 700;
-  if (specialCondition === "Breastfeeding" || breastfeeding) baseIntake += 1000;
+  if (specialCondition === "Pregnant") baseIntake += 700;
+  if (specialCondition === "Breastfeeding") baseIntake += 1000;
 
   switch (lifestyle) {
     case "Athlete": baseIntake += 800; break;

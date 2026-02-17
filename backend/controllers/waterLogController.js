@@ -1,20 +1,25 @@
 import mongoose from "mongoose";
 import WaterLog from "../models/waterLog.js";
 
-const DEFAULT_DAILY_GOAL = 2000;
-const DEFAULT_HISTORY_LIMIT = 100;
-const MAX_HISTORY_LIMIT = 1000;
-
 const getTodayRange = () => {
   const now = new Date();
 
   const start = new Date(now);
-  start.setUTCHours(0 - 5, -30, 0, 0); 
+  start.setHours(0, 0, 0, 0);
 
   const end = new Date(now);
-  end.setUTCHours(23 - 5, 59 - 30, 59, 999);
+  end.setHours(23, 59, 59, 999);
 
   return { start, end };
+};
+
+const DEFAULT_DAILY_GOAL = 2000;
+const DEFAULT_HISTORY_LIMIT = 100;
+const MAX_HISTORY_LIMIT = 1000;
+
+const getUserGoalPerDay = (req) => {
+  const parsedGoal = Number(req.user?.dailyGoal || 0);
+  return parsedGoal > 0 ? parsedGoal : DEFAULT_DAILY_GOAL;
 };
 
 const toStartOfDay = (value) => {
@@ -35,11 +40,6 @@ const formatDateKey = (value) => {
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-};
-
-const getUserGoalPerDay = (req) => {
-  const parsedGoal = Number(req.user?.dailyGoal || 0);
-  return parsedGoal > 0 ? parsedGoal : DEFAULT_DAILY_GOAL;
 };
 
 const getBadgeFromStreak = (streak) => {
@@ -66,109 +66,12 @@ const parseHistoryRange = (query) => {
   }
 
   if (start > end) {
-    start = toStartOfDay(end);
-    start.setDate(start.getDate() - 29);
+    const fallbackStart = toStartOfDay(end);
+    fallbackStart.setDate(fallbackStart.getDate() - 29);
+    start = fallbackStart;
   }
 
   return { start, end };
-};
-
-const parsePagination = (query) => {
-  const page = Math.max(1, Number(query?.page || 1));
-  const rawLimit = Number(query?.limit || DEFAULT_HISTORY_LIMIT);
-  const safeLimit = Number.isFinite(rawLimit) ? rawLimit : DEFAULT_HISTORY_LIMIT;
-  const limit = Math.min(Math.max(1, safeLimit), MAX_HISTORY_LIMIT);
-  const skip = (page - 1) * limit;
-
-  return { page, limit, skip };
-};
-
-const buildDateMathRanges = (endDate) => {
-  const now = new Date();
-
-  const weeklyStart = toStartOfDay(now);
-  weeklyStart.setDate(weeklyStart.getDate() - 6);
-
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-  previousMonthEnd.setHours(23, 59, 59, 999);
-
-  const streakLookback = toStartOfDay(now);
-  streakLookback.setDate(streakLookback.getDate() - 90);
-
-  return {
-    weeklyStart,
-    currentMonthStart,
-    previousMonthStart,
-    previousMonthEnd,
-    streakLookback,
-    endDate,
-    now,
-  };
-};
-
-const getWeeklyStats = (weeklyTotals, weeklyStart, goalPerDay) => {
-  const weeklyMap = weeklyTotals.reduce((acc, item) => {
-    acc[item._id] = Number(item.totalIntake || 0);
-    return acc;
-  }, {});
-
-  const weeklyTotalIntake = Array.from({ length: 7 }).reduce((sum, _, offset) => {
-    const date = new Date(weeklyStart);
-    date.setDate(weeklyStart.getDate() + offset);
-    return sum + Number(weeklyMap[formatDateKey(date)] || 0);
-  }, 0);
-
-  const weeklyAvgIntake = Math.round(weeklyTotalIntake / 7);
-  const weeklyPerformancePercent = Math.min(
-    Math.round((weeklyAvgIntake / goalPerDay) * 100),
-    100
-  );
-
-  return { weeklyAvgIntake, weeklyPerformancePercent };
-};
-
-const getMonthlyPercentChange = (currentMonthResult, previousMonthResult) => {
-  const thisMonthTotal = Number(currentMonthResult?.[0]?.totalIntake || 0);
-  const lastMonthTotal = Number(previousMonthResult?.[0]?.totalIntake || 0);
-
-  const percentChange =
-    lastMonthTotal > 0
-      ? Math.round(((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100)
-      : 0;
-
-  return { thisMonthTotal, lastMonthTotal, percentChange };
-};
-
-const getCurrentStreak = (streakDailyTotals, goalPerDay, now) => {
-  const streakMap = streakDailyTotals.reduce((acc, item) => {
-    acc[item._id] = Number(item.totalIntake || 0);
-    return acc;
-  }, {});
-
-  let streak = 0;
-  const cursor = toStartOfDay(now);
-
-  while (true) {
-    const dayKey = formatDateKey(cursor);
-    if (Number(streakMap[dayKey] || 0) >= goalPerDay) {
-      streak += 1;
-      cursor.setDate(cursor.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-};
-
-const sendBasicServerError = (res, error) => {
-  res.status(500).json({ message: error.message });
-};
-
-const sendServerErrorWithSuccessFlag = (res, error) => {
-  res.status(500).json({ success: false, message: error.message });
 };
 
 export const createWaterLog = async (req, res) => {
@@ -187,7 +90,7 @@ export const createWaterLog = async (req, res) => {
      console.log("Incoming amount:", req.body.amount);
     res.status(201).json(waterLog);
   } catch (error) {
-    sendBasicServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -211,7 +114,7 @@ export const updateWaterLog = async (req, res) => {
 
     res.json(waterLog);
   } catch (error) {
-    sendBasicServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -230,33 +133,27 @@ export const deleteWaterLog = async (req, res) => {
 
     res.json({ message: "Log deleted successfully" });
   } catch (error) {
-    sendBasicServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };
 
 export const getDailySummary = async (req, res) => {
   try {
     const { start, end } = getTodayRange();
-
     const logs = await WaterLog.find({
       userId: req.user.id,
       date: { $gte: start, $lte: end },
     }).sort({ date: -1 });
 
     const totalIntake = logs.reduce((sum, log) => sum + log.amount, 0);
+
     const dailyGoal = getUserGoalPerDay(req);
     const progress = Math.min((totalIntake / dailyGoal) * 100, 100);
 
-    res.status(200).json({
-      success: true,
-      totalIntake,
-      progress,
-      remaining: Math.max(dailyGoal - totalIntake, 0),
-      logs,
-      date: start,
-    });
+    res.status(200).json({ success: true, totalIntake, progress, remaining: Math.max(dailyGoal - totalIntake, 0), logs,date: start});
+
   } catch (error) {
-    sendServerErrorWithSuccessFlag(res, error);
+    res.status(500).json({ success: false, message: error.message});
   }
 };
 
@@ -264,14 +161,29 @@ export const getHistoryInsights = async (req, res) => {
   try {
     const userId = new mongoose.Types.ObjectId(req.user.id);
     const goalPerDay = getUserGoalPerDay(req);
-    const { page, limit, skip } = parsePagination(req.query);
-    const { start, end } = parseHistoryRange(req.query);
-    const ranges = buildDateMathRanges(end);
+    const page = Math.max(1, Number(req.query?.page || 1));
+    const rawLimit = Number(req.query?.limit || DEFAULT_HISTORY_LIMIT);
+    const limit = Math.min(
+      Math.max(1, Number.isFinite(rawLimit) ? rawLimit : DEFAULT_HISTORY_LIMIT),
+      MAX_HISTORY_LIMIT
+    );
+    const skip = (page - 1) * limit;
 
+    const { start, end } = parseHistoryRange(req.query);
     const baseMatch = {
       userId,
       date: { $gte: start, $lte: end },
     };
+
+    const now = new Date();
+    const weeklyStart = toStartOfDay(now);
+    weeklyStart.setDate(weeklyStart.getDate() - 6);
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    previousMonthEnd.setHours(23, 59, 59, 999);
+    const streakLookback = toStartOfDay(now);
+    streakLookback.setDate(streakLookback.getDate() - 90);
 
     const [
       logs,
@@ -322,7 +234,7 @@ export const getHistoryInsights = async (req, res) => {
         {
           $match: {
             userId,
-            date: { $gte: ranges.weeklyStart, $lte: end },
+            date: { $gte: weeklyStart, $lte: end },
           },
         },
         {
@@ -341,7 +253,7 @@ export const getHistoryInsights = async (req, res) => {
         {
           $match: {
             userId,
-            date: { $gte: ranges.currentMonthStart, $lte: end },
+            date: { $gte: currentMonthStart, $lte: end },
           },
         },
         { $group: { _id: null, totalIntake: { $sum: "$amount" } } },
@@ -350,10 +262,7 @@ export const getHistoryInsights = async (req, res) => {
         {
           $match: {
             userId,
-            date: {
-              $gte: ranges.previousMonthStart,
-              $lte: ranges.previousMonthEnd,
-            },
+            date: { $gte: previousMonthStart, $lte: previousMonthEnd },
           },
         },
         { $group: { _id: null, totalIntake: { $sum: "$amount" } } },
@@ -362,7 +271,7 @@ export const getHistoryInsights = async (req, res) => {
         {
           $match: {
             userId,
-            date: { $gte: ranges.streakLookback, $lte: end },
+            date: { $gte: streakLookback, $lte: end },
           },
         },
         {
@@ -382,23 +291,33 @@ export const getHistoryInsights = async (req, res) => {
     const totalLogs = Number(countResult?.[0]?.total || 0);
     const totalPages = totalLogs > 0 ? Math.ceil(totalLogs / limit) : 1;
 
-    const { weeklyAvgIntake, weeklyPerformancePercent } = getWeeklyStats(
-      weeklyTotals,
-      ranges.weeklyStart,
-      goalPerDay
+    const weeklyMap = weeklyTotals.reduce((acc, item) => {
+      acc[item._id] = Number(item.totalIntake || 0);
+      return acc;
+    }, {});
+    const weeklyTotalIntake = Array.from({ length: 7 }).reduce((sum, _, offset) => {
+      const date = new Date(weeklyStart);
+      date.setDate(weeklyStart.getDate() + offset);
+      return sum + Number(weeklyMap[formatDateKey(date)] || 0);
+    }, 0);
+    const weeklyAvgIntake = Math.round(weeklyTotalIntake / 7);
+    const weeklyPerformancePercent = Math.min(
+      Math.round((weeklyAvgIntake / goalPerDay) * 100),
+      100
     );
 
-    const { thisMonthTotal, lastMonthTotal, percentChange } =
-      getMonthlyPercentChange(currentMonthTotalResult, previousMonthTotalResult);
-
-// <<<<<<< HEAD
-    const streak = getCurrentStreak(streakDailyTotals, goalPerDay, ranges.now);
+    const thisMonthTotal = Number(currentMonthTotalResult?.[0]?.totalIntake || 0);
+    const lastMonthTotal = Number(previousMonthTotalResult?.[0]?.totalIntake || 0);
+    const monthlyPercentChange =
+      lastMonthTotal > 0
+        ? Math.round(((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100)
+        : 0;
 
     const streakMap = streakDailyTotals.reduce((acc, item) => {
       acc[item._id] = Number(item.totalIntake || 0);
       return acc;
     }, {});
-    // let streak = 0;
+    let streak = 0;
     const cursor = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
     );
@@ -411,7 +330,6 @@ export const getHistoryInsights = async (req, res) => {
         break;
       }
     }
-// >>>>>>> 7a85765ef48d09587ab8cd8286b01b67854bb060
 
     res.status(200).json({
       success: true,
@@ -442,7 +360,7 @@ export const getHistoryInsights = async (req, res) => {
         monthlyComparison: {
           thisMonthTotal,
           lastMonthTotal,
-          percentChange,
+          percentChange: monthlyPercentChange,
         },
         streak: {
           current: streak,
@@ -451,7 +369,116 @@ export const getHistoryInsights = async (req, res) => {
       },
     });
   } catch (error) {
-    sendServerErrorWithSuccessFlag(res, error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const exportHistoryPdf = async (req, res) => {
+  try {
+    let PDFDocument;
+    try {
+      ({ default: PDFDocument } = await import("pdfkit"));
+    } catch (importError) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "PDF export dependency missing. Install backend dependency 'pdfkit'.",
+      });
+    }
+
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const { start, end } = parseHistoryRange(req.query);
+
+    const logs = await WaterLog.find({
+      userId,
+      date: { $gte: start, $lte: end },
+    })
+      .sort({ date: -1 })
+      .select("amount date");
+
+    const totalsByDate = logs.reduce((acc, log) => {
+      const key = formatDateKey(log.date);
+      acc[key] = (acc[key] || 0) + Number(log.amount || 0);
+      return acc;
+    }, {});
+
+    const fromLabel = start.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const toLabel = end.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    const doc = new PDFDocument({ margin: 36, size: "A4" });
+    const chunks = [];
+
+    doc.on("data", (chunk) => chunks.push(chunk));
+
+    doc.fontSize(20).text("Hydration Report", { align: "left" });
+    doc.moveDown(0.3);
+    doc
+      .fontSize(11)
+      .fillColor("#444")
+      .text(`Period: ${fromLabel} - ${toLabel}`);
+    doc.text(`Total Logs: ${logs.length}`);
+    doc.moveDown(0.8);
+
+    doc.fontSize(13).fillColor("#111").text("Daily Totals");
+    doc.moveDown(0.4);
+
+    const dailyKeys = Object.keys(totalsByDate).sort((a, b) => (a < b ? 1 : -1));
+    if (dailyKeys.length === 0) {
+      doc.fontSize(11).fillColor("#666").text("No logs found for this period.");
+    } else {
+      dailyKeys.forEach((key) => {
+        doc.fontSize(11).fillColor("#222").text(`${key}: ${totalsByDate[key]} ml`);
+      });
+    }
+
+    doc.moveDown(1);
+    doc.fontSize(13).fillColor("#111").text("Log Entries");
+    doc.moveDown(0.4);
+
+    if (logs.length === 0) {
+      doc.fontSize(11).fillColor("#666").text("No entries.");
+    } else {
+      logs.forEach((log) => {
+        const date = new Date(log.date);
+        const dateLabel = date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        const timeLabel = date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        doc
+          .fontSize(10)
+          .fillColor("#222")
+          .text(`${dateLabel} ${timeLabel}  -  ${Number(log.amount || 0)} ml`);
+      });
+    }
+
+    doc.end();
+
+    const pdfBuffer = await new Promise((resolve, reject) => {
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+    });
+
+    const fileName = `hydration-report-${formatDateKey(new Date())}.pdf`;
+    res.status(200).json({
+      success: true,
+      fileName,
+      base64: pdfBuffer.toString("base64"),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
  
  

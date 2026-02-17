@@ -1,87 +1,104 @@
-import { NativeModules, PermissionsAndroid, Platform } from "react-native";
+import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
-import { getFirebaseMessaging } from "../firebase";
+
+let Device = null;
+let Notifications = null;
+let Constants = null;
+
+try {
+  Constants = require("expo-constants").default;
+} catch (error) {
+  // Expo constants are optional at runtime.
+}
 
 const PUSH_TOKEN_KEY = "devicePushToken";
+const EXPO_PUSH_TOKEN_KEY = "expoPushToken";
+
 let isNotificationHandlerReady = false;
-let messagingModule = undefined;
-const isExpoGo = Constants.executionEnvironment === "storeClient";
-const hasRNFirebaseNative = Boolean(NativeModules?.RNFBAppModule);
 
-const getMessaging = () => {
-  if (messagingModule !== undefined) {
-    return messagingModule;
+const detectExpoGo = () => {
+  const executionEnvironment = Constants?.executionEnvironment;
+  if (executionEnvironment === "storeClient") {
+    return true;
   }
 
-  if (isExpoGo || !hasRNFirebaseNative) {
-    messagingModule = null;
-    return messagingModule;
-  }
-
-  messagingModule = getFirebaseMessaging();
-  if (!messagingModule) {
-    messagingModule = null;
-    return messagingModule;
-  }
-
-  messagingModule().setAutoInitEnabled(true);
-
-  return messagingModule;
+  return Constants?.appOwnership === "expo";
 };
+const isExpoGoRuntime = detectExpoGo();
 
-const requestAndroidPermission = async () => {
-  if (Platform.OS !== "android") return true;
-  if (Platform.Version < 33) return true;
-
-  const status = await PermissionsAndroid.request(
-    PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-  );
-
-  return status === PermissionsAndroid.RESULTS.GRANTED;
-};
-
-export const requestPermission = async () => {
-  const messaging = getMessaging();
-  if (!messaging) return false;
-
-  const hasAndroidPermission = await requestAndroidPermission();
-  if (!hasAndroidPermission) return false;
-
+if (!isExpoGoRuntime) {
   try {
-    const authStatus = await messaging().requestPermission();
-    return (
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL
-    );
+    Device = require("expo-device");
+    Notifications = require("expo-notifications");
   } catch (error) {
-    return false;
+    // Notification modules are optional at runtime until dependencies are installed.
   }
+}
+
+const isExpoGo = () => isExpoGoRuntime;
+
+const requestNotificationPermission = async () => {
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== "granted") {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  return finalStatus === "granted";
 };
 
 export const initializeNotifications = async () => {
-  const messaging = getMessaging();
-  if (!messaging) return;
+  if (!Notifications) return;
+  if (isExpoGo()) return;
   if (isNotificationHandlerReady) return;
 
-  await messaging().registerDeviceForRemoteMessages().catch(() => null);
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "default",
+      importance: Notifications.AndroidImportance.MAX,
+    });
+  }
 
   isNotificationHandlerReady = true;
 };
 
 export const getPushTokenForBackend = async () => {
-  const messaging = getMessaging();
-  if (!messaging) {
-    return AsyncStorage.getItem(PUSH_TOKEN_KEY);
+  if (!Notifications || !Device) {
+    return null;
+  }
+  if (isExpoGo()) {
+    return null;
   }
 
-  const hasPermission = await requestPermission();
+  if (Platform.OS !== "android") {
+    return null;
+  }
+
+  if (!Device.isDevice) {
+    return null;
+  }
+
+  const hasPermission = await requestNotificationPermission();
   if (!hasPermission) {
     return null;
   }
 
   try {
-    const token = await messaging().getToken();
+    const tokenResult = await Notifications.getDevicePushTokenAsync();
+    const token = typeof tokenResult?.data === "string" ? tokenResult.data : null;
+
     if (token) {
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, token);
       return token;
@@ -95,4 +112,40 @@ export const getPushTokenForBackend = async () => {
 
 export const getCachedPushToken = async () => {
   return AsyncStorage.getItem(PUSH_TOKEN_KEY);
+};
+
+export const getExpoPushTokenForTesting = async () => {
+  if (!Notifications || !Device) {
+    return null;
+  }
+
+  if (!Device.isDevice) {
+    return null;
+  }
+
+  const hasPermission = await requestNotificationPermission();
+  if (!hasPermission) {
+    return null;
+  }
+
+  try {
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ||
+      Constants?.easConfig?.projectId;
+
+    const tokenResult = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
+
+    const token = typeof tokenResult?.data === "string" ? tokenResult.data : null;
+
+    if (token) {
+      await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
+      return token;
+    }
+  } catch (error) {
+    // Ignore token fetch errors and fallback to cached token.
+  }
+
+  return AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
 };

@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken'
 import User from '../models/userModel.js'
 import bcrypt from "bcryptjs";
-import { calculateHydrationGoal } from "../services/hydrationLogic.js";
 
 import { generateAccessToken ,generateRefreshToken} from '../utils/token.js'
 
@@ -47,22 +46,22 @@ export const refreshAccessToken = async (req, res) => {
 
 export const registerUser = async (req, res) => {
   try {
+    const { name, email, password } = req.body;
 
-    const {name,email,password,weight,height,age,gender,activityLevel,climate,lifestyle,dailyGoal,unit,pregnant,breastfeeding} = req.body;
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({success:false,message:"Email already registered"});
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      name,email,password:hashedPassword,weight,height,age,gender,activityLevel,climate,lifestyle,dailyGoal,unit,pregnant,breastfeeding,
-      dailyGoal: calculateHydrationGoal(req.body)
+
+    await User.create({
+      name,
+      email,
+      password: hashedPassword
     });
 
-    res.status(201).json({success:true,message:"User registered successfully",userId:user._id});
-
+    res.status(201).json({
+      success: true,
+      message: "User registered successfully",
+    });
   } catch (err) {
-    res.status(500).json({success:false,message:err.message});
+    res.status(400).json({ message: err.message });
   }
 };
 

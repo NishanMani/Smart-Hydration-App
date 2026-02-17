@@ -72,6 +72,23 @@ export const updateUserSettings = async (req, res) => {
   }
 };    
 
+export const deleteUserSettings = async (req, res) => {
+  try {
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { $unset: { settings: "" } },
+      { new: true }
+    ).select("settings");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.json({ message: "User settings deleted successfully" });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 export const getUserHydrationGoal = async (req, res) => {
   try {

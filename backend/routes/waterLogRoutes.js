@@ -4,9 +4,9 @@ import {
   updateWaterLog,
   deleteWaterLog,
   getDailySummary,
-  getHistoryInsights
+  getHistoryInsights,
+  exportHistoryPdf,
 } from "../controllers/waterLogController.js";
-import exportHistoryPdf from  '../services/pdfReport.js'
 import { protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
@@ -17,5 +17,4 @@ router.delete("/:id", protect, deleteWaterLog);
 router.get("/daily", protect, getDailySummary);
 router.get("/history", protect, getHistoryInsights);
 router.get("/history/export/pdf", protect, exportHistoryPdf);
-
 export default router;

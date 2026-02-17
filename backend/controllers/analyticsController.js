@@ -1,156 +1,185 @@
 import WaterLog from "../models/waterLog.js";
 
 const DEFAULT_DAILY_GOAL = 2000;
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const getUserDailyGoal = (req) => {
   const parsedGoal = Number(req.user?.dailyGoal || 0);
   return parsedGoal > 0 ? parsedGoal : DEFAULT_DAILY_GOAL;
 };
 
-const getRangeStartAndEnd = (rangeType) => {
+// Helper to get date range for analytics
+const getDateRange = (type) => {
   const now = new Date();
-  const start = new Date(now);
-  const end = new Date(now);
+  let start, end;
 
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
+  switch (type) {
+    case "week":
+      // Rolling last 7 days (including today)
+      start = new Date(now);
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
 
-  if (rangeType === "week") {
-    start.setDate(start.getDate() - 6);
-  }
+      end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+      break;
 
-  if (rangeType === "month") {
-    start.setDate(start.getDate() - 29);
+    case "month":
+      // Rolling last 30 days (including today)
+      start = new Date(now);
+      start.setDate(now.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+
+      end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+      break;
+
+    default:
+      start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(now);
+      end.setHours(23, 59, 59, 999);
   }
 
   return { start, end };
 };
 
-const getDayIndexFromRangeStart = (rangeStart, logDate) => {
-  const logDayStart = new Date(logDate);
-  logDayStart.setHours(0, 0, 0, 0);
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-  return Math.floor((logDayStart.getTime() - rangeStart.getTime()) / DAY_IN_MS);
+const getDayOffset = (rangeStart, dateValue) => {
+  const dayStart = new Date(dateValue);
+  dayStart.setHours(0, 0, 0, 0);
+  return Math.floor((dayStart.getTime() - rangeStart.getTime()) / DAY_MS);
 };
 
-const buildDailyTotals = (logs, rangeStart, daysCount) => {
-  const totals = Array(daysCount).fill(0);
-
-  logs.forEach((log) => {
-    const dayIndex = getDayIndexFromRangeStart(rangeStart, log.date);
-    if (dayIndex >= 0 && dayIndex < daysCount) {
-      totals[dayIndex] += log.amount;
-    }
-  });
-
-  return totals;
-};
-
-const sendServerError = (res, error) => {
-  res.status(500).json({ message: error.message });
-};
-
+// Weekly analytics
 export const getWeeklyAnalytics = async (req, res) => {
   try {
-    const { start, end } = getRangeStartAndEnd("week");
+    const { start, end } = getDateRange("week");
+
     const logs = await WaterLog.find({
       userId: req.user.id,
       date: { $gte: start, $lte: end },
     });
 
-    const dailyTotals = buildDailyTotals(logs, start, 7);
+    const daysCount = 7;
+    const dailyTotals = Array(daysCount).fill(0);
+
+    logs.forEach((log) => {
+      const dayIndex = getDayOffset(start, log.date);
+      if (dayIndex >= 0 && dayIndex < daysCount) {
+        dailyTotals[dayIndex] += log.amount;
+      }
+    });
+
     const goalPerDay = getUserDailyGoal(req);
-    const totalIntake = dailyTotals.reduce((sum, amount) => sum + amount, 0);
-    const dailyPercent = dailyTotals.map((amount) =>
-      Math.min((amount / goalPerDay) * 100, 100)
+    const totalIntake = dailyTotals.reduce((sum, val) => sum + val, 0);
+    const dailyPercent = dailyTotals.map((amt) =>
+      Math.min((amt / goalPerDay) * 100, 100)
     );
 
     res.json({ dailyTotals, dailyPercent, totalIntake, goalPerDay });
   } catch (error) {
-    sendServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };
 
+// Monthly analytics
 export const getMonthlyAnalytics = async (req, res) => {
   try {
-    const { start, end } = getRangeStartAndEnd("month");
+    const { start, end } = getDateRange("month");
+
     const logs = await WaterLog.find({
       userId: req.user.id,
       date: { $gte: start, $lte: end },
     });
 
-    const dailyTotals = buildDailyTotals(logs, start, 30);
-    const totalIntake = dailyTotals.reduce((sum, amount) => sum + amount, 0);
+    const daysCount = 30;
+    const dailyTotals = Array(daysCount).fill(0);
+
+    logs.forEach((log) => {
+      const dayIndex = getDayOffset(start, log.date);
+      if (dayIndex >= 0 && dayIndex < daysCount) {
+        dailyTotals[dayIndex] += log.amount;
+      }
+    });
+
+    const totalIntake = dailyTotals.reduce((sum, val) => sum + val, 0);
 
     res.json({ dailyTotals, totalIntake });
   } catch (error) {
-    sendServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };
 
+// Streak analytics
 export const getStreakAnalytics = async (req, res) => {
   try {
     const today = new Date();
-    const lookbackStart = new Date(today);
-    lookbackStart.setDate(lookbackStart.getDate() - 30);
-    lookbackStart.setHours(0, 0, 0, 0);
+    let streak = 0;
+
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 30);
+    startDate.setHours(0, 0, 0, 0);
 
     const logs = await WaterLog.find({
       userId: req.user.id,
-      date: { $gte: lookbackStart, $lte: today },
+      date: { $gte: startDate, $lte: today },
     });
 
-    const goalPerDay = getUserDailyGoal(req);
-    const intakeByDay = {};
+    const goal = getUserDailyGoal(req);
+    const daysMetGoal = {}; // corrected: object instead of Set
 
     logs.forEach((log) => {
-      const dayKey = log.date.toDateString();
-      intakeByDay[dayKey] = Number(intakeByDay[dayKey] || 0) + log.amount;
+      const day = log.date.toDateString();
+      if (!daysMetGoal[day]) daysMetGoal[day] = 0;
+      daysMetGoal[day] += log.amount;
     });
 
-    let streak = 0;
-    const cursor = new Date(today);
-
+    let current = new Date(today);
     while (true) {
-      const dayKey = cursor.toDateString();
-      if (Number(intakeByDay[dayKey] || 0) >= goalPerDay) {
-        streak += 1;
-        cursor.setDate(cursor.getDate() - 1);
+      const day = current.toDateString();
+      if (daysMetGoal[day] >= goal) {
+        streak++;
+        current.setDate(current.getDate() - 1);
       } else {
         break;
       }
     }
 
-    res.json({ streak, goalPerDay });
+    res.json({ streak, goalPerDay: goal });
   } catch (error) {
-    sendServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };
 
+// Weekly performance percentage
 export const getPerformance = async (req, res) => {
   try {
-    const { start, end } = getRangeStartAndEnd("week");
+    const { start, end } = getDateRange("week");
+
     const logs = await WaterLog.find({
       userId: req.user.id,
       date: { $gte: start, $lte: end },
     });
 
     const totalIntake = logs.reduce((sum, log) => sum + log.amount, 0);
+    const daysCounted = 7;
     const goalPerDay = getUserDailyGoal(req);
-    const maxGoal = goalPerDay * 7;
+    const maxGoal = goalPerDay * daysCounted;
+
     const performancePercent = Math.min((totalIntake / maxGoal) * 100, 100);
 
     res.json({ performancePercent, goalPerDay, totalIntake, maxGoal });
   } catch (error) {
-    sendServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };
 
+// Trend analytics (per drink event)
 export const getTrendAnalytics = async (req, res) => {
   try {
     const range = req.query?.range === "month" ? "month" : "week";
-    const { start, end } = getRangeStartAndEnd(range);
+    const { start, end } = getDateRange(range);
 
     const logs = await WaterLog.find({
       userId: req.user.id,
@@ -161,6 +190,6 @@ export const getTrendAnalytics = async (req, res) => {
 
     res.json({ range, logs });
   } catch (error) {
-    sendServerError(res, error);
+    res.status(500).json({ message: error.message });
   }
 };

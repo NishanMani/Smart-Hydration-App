@@ -16,47 +16,36 @@ const userSchema = new mongoose.Schema({
     },
     weight : {
         type : Number
-        // required : true
     },
     height : {
         type :Number
-        // required : true
     },
     age : {
         type : Number
-        // required : true
     },
     gender : {
         type : String
-        // required : true
     },
     activityLevel : {
         type : String
-        // required : true
     },
     climate : {
         type : String
-        // required : true
     },
     lifestyle : {
         type : String
-        // required : true
     },
     dailyGoal : {
-        type : Number
-        // required : true
+        type : String
     },
     unit : {
-        type : String, enum : ['ml', 'oz'],
-        // required : true
+        type : String, enum : ['ml', 'oz']
     },
     pregnant : {
         type : Boolean
-        // required : true
     },
     breastfeeding : {
-        type : Boolean
-        // required : true      
+        type : Boolean      
     },
     refreshToken : {
         type : String

@@ -9,27 +9,27 @@ const reminderSchema = new mongoose.Schema(
     },
 
     interval: {
-      type: Number, 
+      type: Number, // minutes
       required: true,
     },
 
     startTime: {
-      type: String, 
+      type: String, // "08:00"
       required: true,
     },
 
     endTime: {
-      type: String, 
+      type: String, // "22:00"
       required: true,
     },
 
     sleepStartTime: {
-      type: String, 
+      type: String, // "22:00"
       default: "22:00",
     },
 
     sleepEndTime: {
-      type: String, 
+      type: String, // "06:00"
       default: "06:00",
     },
 
