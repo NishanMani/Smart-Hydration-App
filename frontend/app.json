@@ -16,7 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "googleServicesFile": "./google-services.json",
+      "googleServicesFile": "./android/app/google-services.json",
       "package": "com.smartnotify",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

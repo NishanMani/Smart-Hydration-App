@@ -24,28 +24,24 @@ export const registerValidator = [
     .withMessage("Password must be at least 6 characters"),
  
   body("weight")
-    .notEmpty()
-    .withMessage("Weight is required")
+    .optional({ values: "falsy" })
     .isFloat({ min: 1 })
     .withMessage("Weight must be a positive number"),
  
   body("height")
-    .notEmpty()
-    .withMessage("Height is required")
+    .optional({ values: "falsy" })
     .isFloat({ min: 1 })
     .withMessage("Height must be a positive number"),
  
   body("age")
-    .notEmpty()
-    .withMessage("Age is required")
+    .optional({ values: "falsy" })
     .isInt({ min: 1 })
     .withMessage("Age must be a valid number"),
  
   body("gender")
-    .notEmpty()
-    .withMessage("Gender is required")
-    .isIn(["male", "female"])
-    .withMessage("Gender must be male or female"),
+    .optional({ values: "falsy" })
+    .isIn(["male", "female", "other", "Male", "Female", "Other"])
+    .withMessage("Gender must be male, female or other"),
  
   body("activityLevel")
     .optional()

@@ -14,6 +14,7 @@ import { removeToken } from "../services/storageService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useState } from "react";
 import { getUserProfile } from "../api/userApi";
+import { normalizeUnit, toDisplayAmount } from "../utils/unit";
 
 export default function SettingsScreen() {
 
@@ -21,6 +22,7 @@ export default function SettingsScreen() {
   const [profileName, setProfileName] = useState("User");
   const [profileEmail, setProfileEmail] = useState("No email");
   const [dailyGoal, setDailyGoal] = useState(2772);
+  const [unit, setUnit] = useState("ml");
 
   const loadSettingsData = async () => {
     try {
@@ -35,6 +37,7 @@ export default function SettingsScreen() {
       if (serverProfile) {
         setProfileName(serverProfile?.name?.trim() || "User");
         setProfileEmail(serverProfile?.email?.trim() || "No email");
+        setUnit(normalizeUnit(serverProfile?.unit));
         const serverGoal = Number(serverProfile?.dailyGoal || 0);
         if (serverGoal > 0) setDailyGoal(serverGoal);
       }
@@ -43,9 +46,11 @@ export default function SettingsScreen() {
         const parsedProfile = JSON.parse(profileData);
         setProfileName(parsedProfile?.name?.trim() || "User");
         setProfileEmail(parsedProfile?.email?.trim() || "No email");
+        setUnit(normalizeUnit(parsedProfile?.unit));
       } else if (!serverProfile) {
         setProfileName("User");
         setProfileEmail("No email");
+        setUnit("ml");
       }
 
       if (hydrationData && !serverProfile?.dailyGoal) {
@@ -244,7 +249,7 @@ export default function SettingsScreen() {
                 Daily Goal
               </Text>
               <Text style={styles.menuSub}>
-                Currently: {dailyGoal} ml
+                Currently: {toDisplayAmount(dailyGoal, unit)} {normalizeUnit(unit)}
               </Text>
             </View>
 

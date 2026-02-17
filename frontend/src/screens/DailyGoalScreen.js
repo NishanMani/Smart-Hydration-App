@@ -13,12 +13,14 @@ import { useNavigation } from "@react-navigation/native";
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserProfile, updateUserProfile } from "../api/userApi";
+import { normalizeUnit, toDisplayAmount, toMlAmount } from "../utils/unit";
 
 export default function DailyGoalScreen() {
 
   const navigation = useNavigation();
 
   const [goal, setGoal] = useState("");
+  const [unit, setUnit] = useState("ml");
 
   // Load saved goal
   useEffect(() => {
@@ -28,9 +30,11 @@ export default function DailyGoalScreen() {
   const loadGoal = async () => {
     try {
       const res = await getUserProfile().catch(() => null);
+      const resolvedUnit = normalizeUnit(res?.data?.unit);
+      setUnit(resolvedUnit);
       const serverGoal = Number(res?.data?.dailyGoal || 0);
       if (serverGoal > 0) {
-        setGoal(String(serverGoal));
+        setGoal(String(toDisplayAmount(serverGoal, resolvedUnit)));
         return;
       }
 
@@ -40,7 +44,7 @@ export default function DailyGoalScreen() {
 
       const parsed = JSON.parse(data);
 
-      setGoal(String(parsed.goal || 2772));
+      setGoal(String(toDisplayAmount(parsed.goal || 2772, resolvedUnit)));
 
     } catch (e) {
       console.log(e);
@@ -52,9 +56,10 @@ export default function DailyGoalScreen() {
     try {
       const parsedGoal = Number(goal);
       if (!Number.isFinite(parsedGoal) || parsedGoal <= 0) {
-        Alert.alert("Invalid Goal", "Please enter a valid daily goal in ml.");
+        Alert.alert("Invalid Goal", `Please enter a valid daily goal in ${unit}.`);
         return;
       }
+      const parsedGoalMl = toMlAmount(parsedGoal, unit);
 
       const data = await AsyncStorage.getItem("hydrationData");
 
@@ -62,10 +67,10 @@ export default function DailyGoalScreen() {
 
       const updatedData = {
         ...parsed,
-        goal: parsedGoal,
+        goal: parsedGoalMl,
       };
 
-      await updateUserProfile({ dailyGoal: String(parsedGoal) }).catch(() => null);
+      await updateUserProfile({ dailyGoal: String(parsedGoalMl) }).catch(() => null);
 
       await AsyncStorage.setItem(
         "hydrationData",
@@ -113,11 +118,11 @@ export default function DailyGoalScreen() {
           onChangeText={setGoal}
           keyboardType="numeric"
           style={styles.input}
-          placeholder="Enter ml"
+          placeholder={`Enter ${unit}`}
         />
 
         <Text style={styles.helper}>
-          Recommended: 2000 – 3500 ml
+          {unit === "oz" ? "Recommended: 68 – 118 oz" : "Recommended: 2000 – 3500 ml"}
         </Text>
 
       </View>

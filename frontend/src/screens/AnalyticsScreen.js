@@ -10,6 +10,8 @@ import {
   getStreakAnalytics,
   getWeeklyAnalytics,
 } from "../api/analyticsApi"; 
+import { getUserProfile } from "../api/userApi";
+import { normalizeUnit, toDisplayAmount } from "../utils/unit";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -40,6 +42,7 @@ const [goalCompletion, setGoalCompletion] = useState(0);
 const [avgIntake, setAvgIntake] = useState(0);
 const [daysMetGoal, setDaysMetGoal] = useState(0);
 const [goalPerDay, setGoalPerDay] = useState(2000);
+const [unit, setUnit] = useState("ml");
 
 useEffect(() => {
 loadAnalytics();
@@ -53,11 +56,13 @@ const loadAnalytics = async () => {
       monthlyRes,
       streakRes,
       performanceRes,
+      profileRes,
     ] = await Promise.all([
       getWeeklyAnalytics(),
       getMonthlyAnalytics(),
       getStreakAnalytics(),
       getPerformance(),
+      getUserProfile().catch(() => null),
     ]);
 
     const weeklyTotals = Array.isArray(weeklyRes?.data?.dailyTotals)
@@ -96,6 +101,7 @@ const loadAnalytics = async () => {
     setGoalCompletion(Math.round(Number(performanceRes?.data?.performancePercent || 0)));
     setDaysMetGoal(metGoalDays);
     setStreak(Number(streakRes?.data?.streak || 0));
+    setUnit(normalizeUnit(profileRes?.data?.unit));
 
   } catch (e) {
     console.log(e);
@@ -106,6 +112,7 @@ const loadAnalytics = async () => {
     setGoalCompletion(0);
     setDaysMetGoal(0);
     setStreak(0);
+    setUnit("ml");
   }
 };
 
@@ -115,14 +122,20 @@ useFocusEffect(
   }, [])
 );
 
+const unitLabel = normalizeUnit(unit);
+const displayAvgIntake = toDisplayAmount(avgIntake, unitLabel);
+const displayGoalPerDay = toDisplayAmount(goalPerDay, unitLabel);
+const weeklyDisplay = weeklyIntake.map((value) => toDisplayAmount(value, unitLabel));
+const monthlyDisplay = monthlyIntake.map((value) => toDisplayAmount(value, unitLabel));
+
 const weeklyData = {
 labels: getRecentWeekdayLabels(7),
-datasets: [{ data: weeklyIntake }],
+datasets: [{ data: weeklyDisplay }],
 };
 
 const monthlyData = {
 labels: ["-29d","-24d","-19d","-14d","-9d","-4d","Today"],
-datasets: [{ data: monthlyIntake }],
+datasets: [{ data: monthlyDisplay }],
 };
 
 const handleBack = () => {
@@ -192,10 +205,10 @@ return (
 
       <View style={styles.card}>
         <Text style={styles.cardValue}>
-          {avgIntake}
+          {displayAvgIntake}
         </Text>
         <Text style={styles.cardLabel}>
-          Avg Daily Intake (ml)
+          Avg Daily Intake ({unitLabel})
         </Text>
       </View>
 
@@ -222,7 +235,7 @@ return (
           {daysMetGoal}
         </Text>
         <Text style={styles.cardLabel}>
-          Days Met Goal ({goalPerDay} ml)
+          Days Met Goal ({displayGoalPerDay} {unitLabel})
         </Text>
       </View>
 
@@ -242,7 +255,7 @@ return (
           data={weeklyData}
           width={screenWidth - 80}
           height={180}
-          yAxisSuffix="ml"
+          yAxisSuffix={unitLabel}
           chartConfig={{
             backgroundGradientFrom: "#f3f4f6",
             backgroundGradientTo: "#f3f4f6",
@@ -261,7 +274,7 @@ return (
           data={monthlyData}
           width={screenWidth - 80}
           height={180}
-          yAxisSuffix="ml"
+          yAxisSuffix={unitLabel}
           chartConfig={{
             backgroundGradientFrom: "#f3f4f6",
             backgroundGradientTo: "#f3f4f6",
