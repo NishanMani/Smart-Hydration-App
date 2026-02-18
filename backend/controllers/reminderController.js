@@ -45,6 +45,14 @@ export const createOrUpdateReminder = async (req, res) => {
       sleepMode,
       pauseDurationMinutes,
     } = req.body;
+    console.log(
+      "[Reminder API] /set request received:",
+      JSON.stringify({
+        userId: req.user.id,
+        hasFcmToken: Boolean(fcmToken),
+        fcmToken: fcmToken || null,
+      })
+    );
 
     let reminder = await Reminder.findOne({ userId: req.user.id });
 
@@ -99,8 +107,17 @@ export const createOrUpdateReminder = async (req, res) => {
       });
     }
 
+    console.log(
+      "[Reminder API] /set saved reminder:",
+      JSON.stringify({
+        userId: req.user.id,
+        reminderId: reminder._id,
+        storedFcmToken: reminder.fcmToken || null,
+      })
+    );
     res.json(reminder);
   } catch (error) {
+    console.error("[Reminder API] /set failed:", error.message);
     res.status(500).json({ message: error.message });
   }
 };
