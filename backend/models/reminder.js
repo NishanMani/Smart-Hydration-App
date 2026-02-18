@@ -24,7 +24,6 @@ const reminderSchema = new mongoose.Schema(
     },
 
     sleepStartTime: {
-<<<<<<< HEAD
       type: String, // "22:00"
       default: "22:00",
     },
@@ -32,13 +31,6 @@ const reminderSchema = new mongoose.Schema(
     sleepEndTime: {
       type: String, // "06:00"
       default: "06:00",
-=======
-      type: String, 
-    },
-
-    sleepEndTime: {
-      type: String, 
->>>>>>> origin/main
     },
 
     isActive: {

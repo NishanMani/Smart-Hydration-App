@@ -14,10 +14,11 @@ import { useState, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getReminder, setReminder } from "../api/reminderApi";
+import { getReminder, saveFcmToken, setReminder } from "../api/reminderApi";
 import {
   ensureNotificationPermission,
   getPushTokenForBackend,
+  syncFcmTokenToBackend,
   syncLocalReminderNotifications,
 } from "../services/notificationService";
 
@@ -167,6 +168,15 @@ export default function ReminderScreen() {
       console.log("[Reminders] Save initiated. Notifications enabled:", enabled);
       console.log("[Reminders] Token fetched for backend:", fcmToken);
 
+      if (fcmToken) {
+        try {
+          await saveFcmToken(fcmToken);
+          console.log("[Reminders] FCM token sent to backend via saveFcmToken.");
+        } catch (tokenSyncError) {
+          console.log("[Reminders] Failed to send FCM token via saveFcmToken:", tokenSyncError);
+        }
+      }
+
       const payload = {
         interval: intervalMap[interval],
         activityLevel,
@@ -305,6 +315,13 @@ export default function ReminderScreen() {
                 ensureNotificationPermission().catch((error) => {
                   console.log("[Reminders] Permission request failed on toggle:", error);
                 });
+                syncFcmTokenToBackend()
+                  .then((synced) => {
+                    console.log("[Reminders] FCM sync on toggle result:", synced);
+                  })
+                  .catch((error) => {
+                    console.log("[Reminders] FCM sync on toggle failed:", error);
+                  });
                 getPushTokenForBackend()
                   .then((token) => {
                     console.log("[Reminders] Token fetched after enabling reminders:", token);

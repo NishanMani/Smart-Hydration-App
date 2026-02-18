@@ -14,7 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import { registerUser, loginUser } from "../api/authApi";
 import { saveToken, saveRefreshToken } from "../services/storageService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getPushTokenForBackend } from "../services/notificationService";
+import { syncFcmTokenToBackend } from "../services/notificationService";
 
 export default function AuthScreen() {
   const [activeTab, setActiveTab] = useState("login");
@@ -129,7 +129,7 @@ export default function AuthScreen() {
         }
 
         const { currentUserId } = await persistSession(user, token, refreshToken);
-        await getPushTokenForBackend().catch(() => null);
+        await syncFcmTokenToBackend().catch(() => null);
         const onboardingKey = currentUserId
           ? `onboardingCompleted:${currentUserId}`
           : "onboardingCompleted";
@@ -149,7 +149,7 @@ export default function AuthScreen() {
         }
 
         const { currentUserId } = await persistSession(user, token, refreshToken);
-        await getPushTokenForBackend().catch(() => null);
+        await syncFcmTokenToBackend().catch(() => null);
 
         const onboardingKey = currentUserId
           ? `onboardingCompleted:${currentUserId}`
@@ -174,7 +174,14 @@ export default function AuthScreen() {
       const backendMessage =
         e?.response?.data?.message ||
         e?.response?.data?.errors?.[0]?.msg ||
-        "Something went wrong";
+        (e?.request
+          ? "Unable to reach server. Check backend is running and API URL is correct."
+          : "Something went wrong");
+      console.log("[Auth] Login/Register failed:", {
+        message: e?.message,
+        status: e?.response?.status,
+        data: e?.response?.data,
+      });
       Alert.alert("Auth Error", backendMessage);
     } finally {
       setIsSubmitting(false);

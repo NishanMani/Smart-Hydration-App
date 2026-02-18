@@ -65,8 +65,8 @@ export const registerValidator = [
     .withMessage("Invalid special condition"),
  
   body("lifestyle")
-<<<<<<< HEAD
-    .optional()
+    .exists({ checkFalsy: true })
+    .withMessage("Lifestyle is required")
     .isIn([
       "Standard",
       "Athlete",
@@ -76,11 +76,6 @@ export const registerValidator = [
       "Senior citizen",
       "Senior Citizen",
     ])
-=======
-    .exists({ checkFalsy: true })
-    .withMessage("Lifestyle is required")
-    .isIn(["Athlete", "Office Worker", "Outdoor Worker", "Senior"])
->>>>>>> origin/main
     .withMessage("Invalid lifestyle"),
  
   body("unit")

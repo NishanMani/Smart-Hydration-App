@@ -8,6 +8,10 @@ export const setReminder = (data) => {
   return axiosInstance.post("/reminder/set", data);
 };
 
+export const saveFcmToken = (fcmToken) => {
+  return axiosInstance.post("/reminder/set", { fcmToken });
+};
+
 export const setSleepMode = (sleepMode) => {
   return axiosInstance.put("/reminder/sleep", { sleepMode });
 };

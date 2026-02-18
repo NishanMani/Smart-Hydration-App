@@ -7,7 +7,7 @@ import {
 } from "../services/storageService";
 
 const axiosInstance = axios.create({
-  baseURL: "http://10.0.2.2:5000/api",
+  baseURL: "http://10.0.4.81:5000/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -35,7 +35,7 @@ const refreshAccessToken = async () => {
     throw new Error("No refresh token available");
   }
 
-  const response = await axios.post("http://10.0.2.2:5000/api/auth/refresh", {
+  const response = await axios.post("http://10.0.4.81:5000/api/auth/refresh", {
     refreshToken,
   });
 

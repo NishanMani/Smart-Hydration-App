@@ -1,19 +1,18 @@
-import { Platform } from "react-native";
+import { useEffect } from "react";
+import { PermissionsAndroid, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken as getAuthToken } from "./storageService";
+import { saveFcmToken } from "../api/reminderApi";
 
 let Device = null;
 let Notifications = null;
-let Constants = null;
-let FirebaseMessaging = null;
-
-try {
-  Constants = require("expo-constants").default;
-} catch (error) {
-  // Expo constants are optional at runtime.
-}
+let messaging = null;
+let getTokenFromMessaging = null;
+let onTokenRefreshFromMessaging = null;
+let requestPermissionFromMessaging = null;
+let setBackgroundMessageHandlerFromMessaging = null;
 
 const PUSH_TOKEN_KEY = "devicePushToken";
-const EXPO_PUSH_TOKEN_KEY = "expoPushToken";
 const LOCAL_REMINDER_NOTIFICATION_IDS_KEY = "localReminderNotificationIds";
 
 let isNotificationHandlerReady = false;
@@ -26,9 +25,21 @@ try {
 }
 
 try {
-  FirebaseMessaging = require("@react-native-firebase/messaging").default;
+  const firebaseAppModule = require("@react-native-firebase/app");
+  const firebaseMessagingModule = require("@react-native-firebase/messaging");
+  const getApp = firebaseAppModule.getApp;
+  const getMessaging = firebaseMessagingModule.getMessaging;
+  getTokenFromMessaging = firebaseMessagingModule.getToken;
+  onTokenRefreshFromMessaging = firebaseMessagingModule.onTokenRefresh;
+  requestPermissionFromMessaging = firebaseMessagingModule.requestPermission;
+  setBackgroundMessageHandlerFromMessaging =
+    firebaseMessagingModule.setBackgroundMessageHandler;
+
+  if (getApp && getMessaging) {
+    messaging = getMessaging(getApp());
+  }
 } catch (error) {
-  // Firebase messaging is optional until native dependency is installed/configured.
+  // Firebase messaging may be unavailable until native setup is complete.
 }
 
 const requestNotificationPermission = async () => {
@@ -48,6 +59,37 @@ export const ensureNotificationPermission = async () => {
   const granted = await requestNotificationPermission();
   console.log("[Notifications] Permission granted:", granted);
   return granted;
+};
+
+const hasAuthToken = async () => {
+  const token = await getAuthToken();
+  return Boolean(token);
+};
+
+export const requestUserPermission = async () => {
+  try {
+    if (Platform.OS === "android") {
+      if (Number(Platform.Version) < 33) return true;
+
+      const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+      const alreadyGranted = await PermissionsAndroid.check(permission);
+      if (alreadyGranted) return true;
+
+      const granted = await PermissionsAndroid.request(permission);
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+
+    if (Platform.OS === "ios") {
+      if (!messaging || !requestPermissionFromMessaging) return false;
+      const status = await requestPermissionFromMessaging(messaging);
+      return status === 1 || status === 2;
+    }
+
+    return true;
+  } catch (error) {
+    console.log("[Notifications] Permission request error:", error);
+    return false;
+  }
 };
 
 export const initializeNotifications = async () => {
@@ -75,62 +117,31 @@ export const initializeNotifications = async () => {
 };
 
 export const getPushTokenForBackend = async () => {
-  if (Platform.OS !== "android") {
-    console.log("[Notifications] Push token skipped: platform is not Android.");
+  if (!messaging) {
+    console.log("[Notifications] Push token skipped: Firebase messaging not available.");
     return null;
   }
 
-  if (Notifications) {
-    const hasPermission = await requestNotificationPermission();
-    if (!hasPermission) {
-      console.log("[Notifications] Push token skipped: notification permission not granted.");
-      return null;
-    }
+  const hasPermission = await requestUserPermission();
+  if (!hasPermission) {
+    console.log("[Notifications] Push token skipped: notification permission not granted.");
+    return null;
   }
 
   if (Device && !Device.isDevice) {
-    console.log("[Notifications] Push token skipped: running on emulator/simulator.");
-    return null;
+    console.log("[Notifications] Running on emulator/simulator. Attempting FCM token anyway.");
   }
 
   try {
     let token = null;
-
-    if (FirebaseMessaging) {
-      const firebaseToken = await FirebaseMessaging().getToken();
-      if (typeof firebaseToken === "string" && firebaseToken.length > 0) {
-        token = firebaseToken;
-        console.log("[Notifications] Push token received from Firebase:", token);
-      }
+    if (!getTokenFromMessaging) {
+      console.log("[Notifications] Push token skipped: Firebase token API unavailable.");
+      return null;
     }
-
-    if (!token && Notifications) {
-      const tokenResult = await Notifications.getDevicePushTokenAsync();
-      const deviceToken =
-        typeof tokenResult?.data === "string" ? tokenResult.data : null;
-      const tokenType = String(tokenResult?.type || "").toLowerCase();
-
-      if (deviceToken && (!tokenType || tokenType === "fcm")) {
-        token = deviceToken;
-        console.log("[Notifications] Push token received from device API:", token);
-      }
-    }
-
-    // Fallback for Expo runtime/dev workflows where FCM token may be unavailable.
-    if (!token && Notifications) {
-      const projectId =
-        Constants?.expoConfig?.extra?.eas?.projectId ||
-        Constants?.easConfig?.projectId;
-      const expoTokenResult = projectId
-        ? await Notifications.getExpoPushTokenAsync({ projectId })
-        : await Notifications.getExpoPushTokenAsync();
-      const expoToken =
-        typeof expoTokenResult?.data === "string" ? expoTokenResult.data : null;
-
-      if (expoToken) {
-        token = expoToken;
-        console.log("[Notifications] Expo push token fallback received:", token);
-      }
+    const firebaseToken = await getTokenFromMessaging(messaging);
+    if (typeof firebaseToken === "string" && firebaseToken.length > 0) {
+      token = firebaseToken;
+      console.log("[Notifications] Push token received from Firebase:", token);
     }
 
     if (token) {
@@ -151,6 +162,25 @@ export const getPushTokenForBackend = async () => {
   }
 
   return cachedToken;
+};
+
+export const syncFcmTokenToBackend = async () => {
+  try {
+    if (!(await hasAuthToken())) return false;
+
+    const hasPermission = await requestUserPermission();
+    if (!hasPermission) return false;
+
+    const token = await getPushTokenForBackend();
+    if (!token) return false;
+
+    console.log("[Notifications] Syncing push token to backend:", token);
+    await saveFcmToken(token);
+    return true;
+  } catch (error) {
+    console.log("[Notifications] FCM sync error:", error);
+    return false;
+  }
 };
 
 export const getCachedPushToken = async () => {
@@ -247,38 +277,30 @@ export const syncLocalReminderNotifications = async ({
   console.log("[Notifications] Local reminder notifications scheduled:", scheduledIds.length);
 };
 
-export const getExpoPushTokenForTesting = async () => {
-  if (!Notifications || !Device) {
-    return null;
-  }
+if (messaging && setBackgroundMessageHandlerFromMessaging) {
+  setBackgroundMessageHandlerFromMessaging(messaging, async (remoteMessage) => {
+    console.log("[Notifications] Background message received:", remoteMessage);
+  });
+}
 
-  if (!Device.isDevice) {
-    return null;
-  }
+export const Notification = () => {
+  useEffect(() => {
+    if (!messaging || !onTokenRefreshFromMessaging) return () => {};
 
-  const hasPermission = await requestNotificationPermission();
-  if (!hasPermission) {
-    return null;
-  }
+    const unsubscribe = onTokenRefreshFromMessaging(messaging, async (token) => {
+      try {
+        if (!(await hasAuthToken())) return;
+        if (!token) return;
 
-  try {
-    const projectId =
-      Constants?.expoConfig?.extra?.eas?.projectId ||
-      Constants?.easConfig?.projectId;
+        console.log("[Notifications] Token refreshed:", token);
+        await saveFcmToken(token);
+      } catch (error) {
+        console.log("[Notifications] Token refresh sync failed:", error);
+      }
+    });
 
-    const tokenResult = projectId
-      ? await Notifications.getExpoPushTokenAsync({ projectId })
-      : await Notifications.getExpoPushTokenAsync();
+    return unsubscribe;
+  }, []);
 
-    const token = typeof tokenResult?.data === "string" ? tokenResult.data : null;
-
-    if (token) {
-      await AsyncStorage.setItem(EXPO_PUSH_TOKEN_KEY, token);
-      return token;
-    }
-  } catch (error) {
-    // Ignore token fetch errors and fallback to cached token.
-  }
-
-  return AsyncStorage.getItem(EXPO_PUSH_TOKEN_KEY);
+  return null;
 };

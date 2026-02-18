@@ -76,7 +76,6 @@ export const updateUserProfile = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD
 export const deleteUserProfile = async (req, res) => {
   try {
     const deletedUser = await User.findByIdAndDelete(req.user.id);
@@ -184,6 +183,4 @@ export const deleteUserHydrationGoal = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };      
-=======
->>>>>>> origin/main
 

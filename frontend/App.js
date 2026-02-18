@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import AppNavigator from "./src/navigation/AppNavigator";
 import {
   initializeNotifications,
+  Notification,
 } from "./src/services/notificationService";
 
 export default function App() {
@@ -13,5 +14,10 @@ export default function App() {
     setupNotifications();
   }, []);
 
-  return <AppNavigator />;
+  return (
+    <>
+      <Notification />
+      <AppNavigator />
+    </>
+  );
 }
