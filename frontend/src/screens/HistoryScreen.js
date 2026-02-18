@@ -141,6 +141,11 @@ export default function HistoryScreen() {
 
       let streakCount = 0;
       const cursor = new Date(today);
+      const todayKey = cursor.toDateString();
+      if (Number(totalsByDate[todayKey] || 0) < dailyGoal) {
+        cursor.setDate(cursor.getDate() - 1);
+      }
+
       while (true) {
         const key = cursor.toDateString();
         if (Number(totalsByDate[key] || 0) >= dailyGoal) {

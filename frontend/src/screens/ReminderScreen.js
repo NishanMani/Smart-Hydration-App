@@ -7,6 +7,7 @@ import {
   Switch,
   Alert,
   Linking,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,6 +31,7 @@ export default function ReminderScreen() {
   const [pauseDurationMinutes, setPauseDurationMinutes] = useState(60);
   const [sleepMode, setSleepMode] = useState(false);
   const [interval, setReminderInterval] = useState("30 minutes");
+  const [customIntervalMinutes, setCustomIntervalMinutes] = useState("45");
   const [activityLevel, setActivityLevel] = useState("Moderate");
 
   const [sleepStartTime, setSleepStartTime] = useState(new Date());
@@ -44,7 +46,7 @@ export default function ReminderScreen() {
     });
   }, []);
 
-  const intervals = ["30 minutes", "1 hour", "1.5 hours", "2 hours", "3 hours"];
+  const intervals = ["30 minutes", "1 hour", "1.5 hours", "2 hours", "3 hours", "Custom"];
 
   const intervalMap = {
     "30 minutes": 30,
@@ -66,6 +68,22 @@ export default function ReminderScreen() {
     90: "1.5 hours",
     120: "2 hours",
     180: "3 hours",
+  };
+
+  const getIntervalMinutes = () => {
+    if (interval === "Custom") {
+      const parsed = Number(customIntervalMinutes);
+      return Number.isFinite(parsed) && parsed >= 1 ? parsed : 30;
+    }
+    return intervalMap[interval] || 30;
+  };
+
+  const getIntervalLabel = () => {
+    if (interval === "Custom") {
+      const minutes = getIntervalMinutes();
+      return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+    }
+    return interval;
   };
 
   const onChangeSleepStart = (event, selectedDate) => {
@@ -117,7 +135,7 @@ export default function ReminderScreen() {
   const generateReminders = () => {
     if (!enabled || paused) return [];
 
-    const intervalMinutes = intervalMap[interval];
+    const intervalMinutes = getIntervalMinutes();
     if (!intervalMinutes) return [];
 
     const reminders = [];
@@ -147,6 +165,7 @@ export default function ReminderScreen() {
         pauseDurationMinutes,
         sleepMode,
         interval,
+        customIntervalMinutes,
         sleepStartTime,
         sleepEndTime,
         activityLevel,
@@ -178,7 +197,7 @@ export default function ReminderScreen() {
       }
 
       const payload = {
-        interval: intervalMap[interval],
+        interval: getIntervalMinutes(),
         activityLevel,
         isActive: enabled,
         isPaused: paused,
@@ -193,7 +212,7 @@ export default function ReminderScreen() {
         await syncLocalReminderNotifications({
           enabled,
           paused,
-          intervalMinutes: intervalMap[interval],
+          intervalMinutes: getIntervalMinutes(),
           sleepMode,
           sleepStartTime: toHHmm(sleepStartTime),
           sleepEndTime: toHHmm(sleepEndTime),
@@ -245,9 +264,18 @@ export default function ReminderScreen() {
         setPauseDurationMinutes(Number(serverReminder.pauseDurationMinutes || 60));
         setSleepMode(Boolean(serverReminder.sleepMode));
         setActivityLevel(serverReminder.activityLevel || "Moderate");
-        setReminderInterval(
-          intervalLabelFromMinutes[Number(serverReminder.interval)] || "30 minutes"
-        );
+        const serverInterval = Number(serverReminder.interval);
+        const label = intervalLabelFromMinutes[serverInterval];
+        if (label) {
+          setReminderInterval(label);
+          setCustomIntervalMinutes("45");
+        } else if (serverInterval > 0) {
+          setReminderInterval("Custom");
+          setCustomIntervalMinutes(String(serverInterval));
+        } else {
+          setReminderInterval("30 minutes");
+          setCustomIntervalMinutes("45");
+        }
         setSleepStartTime(fromHHmm(serverReminder.sleepStartTime || "22:00"));
         setSleepEndTime(fromHHmm(serverReminder.sleepEndTime || "06:00"));
         return;
@@ -259,6 +287,7 @@ export default function ReminderScreen() {
         setPauseDurationMinutes(Number(localReminder.pauseDurationMinutes || 60));
         setSleepMode(Boolean(localReminder.sleepMode));
         setReminderInterval(localReminder.interval || "30 minutes");
+        setCustomIntervalMinutes(String(localReminder.customIntervalMinutes || "45"));
         setActivityLevel(localReminder.activityLevel || "Moderate");
         setSleepStartTime(new Date(localReminder.sleepStartTime || new Date()));
         setSleepEndTime(new Date(localReminder.sleepEndTime || new Date()));
@@ -279,10 +308,10 @@ export default function ReminderScreen() {
   };
 
   const previewText = sleepMode
-    ? `You'll receive reminders every ${interval}. Except between ${formatTime(
+    ? `You'll receive reminders every ${getIntervalLabel()}. Except between ${formatTime(
         sleepStartTime
       )} and ${formatTime(sleepEndTime)}.`
-    : `You'll receive reminders every ${interval} throughout the day.`;
+    : `You'll receive reminders every ${getIntervalLabel()} throughout the day.`;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -448,6 +477,22 @@ export default function ReminderScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+
+          {interval === "Custom" && (
+            <>
+              <Text style={styles.inputLabel}>Custom Interval (minutes)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="number-pad"
+                value={customIntervalMinutes}
+                onChangeText={(value) => {
+                  const numeric = value.replace(/[^0-9]/g, "");
+                  setCustomIntervalMinutes(numeric);
+                }}
+                placeholder="Enter minutes"
+              />
+            </>
+          )}
         </View>
 
         <View style={styles.previewCard}>
