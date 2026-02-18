@@ -1,13 +1,5 @@
 import Reminder from "../models/reminder.js";
 
-const DEFAULT_ACTIVITY_LEVEL = "Moderate";
-const DEFAULT_INTERVAL = 30;
-const DEFAULT_START_TIME = "08:00";
-const DEFAULT_END_TIME = "22:00";
-const DEFAULT_SLEEP_START = "22:00";
-const DEFAULT_SLEEP_END = "06:00";
-const DEFAULT_PAUSE_DURATION = 60;
-
 const activityLevelMap = {
   low: "Sedentary",
   high: "Very Active",
@@ -19,17 +11,25 @@ const activityLevelMap = {
 };
 
 const normalizeActivityLevel = (value) => {
-  if (!value) return DEFAULT_ACTIVITY_LEVEL;
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return undefined;
+  }
   const normalized = String(value).trim().toLowerCase();
-  return activityLevelMap[normalized] || DEFAULT_ACTIVITY_LEVEL;
+  return activityLevelMap[normalized];
 };
 
-const toValidDuration = (value, fallback = DEFAULT_PAUSE_DURATION) => {
-  return Math.max(1, Number(value || fallback));
+const toValidDuration = (value) => {
+  const duration = Number(value);
+  if (!Number.isFinite(duration) || duration < 1) return null;
+  return duration;
 };
 
 const getPausedUntilFromDuration = (durationMinutes) => {
   return new Date(Date.now() + durationMinutes * 60 * 1000);
+};
+
+const sendBadRequest = (res, message) => {
+  res.status(400).json({ message });
 };
 
 const sendServerError = (res, error) => {
@@ -38,9 +38,11 @@ const sendServerError = (res, error) => {
 
 const applyPauseState = (reminder, shouldPause, durationMinutes) => {
   reminder.isPaused = shouldPause;
-  reminder.pauseDurationMinutes = durationMinutes;
+  if (durationMinutes !== undefined && durationMinutes !== null) {
+    reminder.pauseDurationMinutes = durationMinutes;
+  }
   reminder.pausedUntil = shouldPause
-    ? getPausedUntilFromDuration(durationMinutes)
+    ? getPausedUntilFromDuration(reminder.pauseDurationMinutes)
     : null;
 };
 
@@ -75,6 +77,14 @@ export const createOrUpdateReminder = async (req, res) => {
     } = req.body;
 
     let reminder = await Reminder.findOne({ userId: req.user.id });
+    const normalizedActivityLevel =
+      activityLevel !== undefined
+        ? normalizeActivityLevel(activityLevel)
+        : undefined;
+
+    if (activityLevel !== undefined && !normalizedActivityLevel) {
+      return sendBadRequest(res, "Invalid activityLevel");
+    }
 
     if (reminder) {
       if (interval !== undefined) reminder.interval = interval;
@@ -83,24 +93,33 @@ export const createOrUpdateReminder = async (req, res) => {
       if (sleepStartTime !== undefined) reminder.sleepStartTime = sleepStartTime;
       if (sleepEndTime !== undefined) reminder.sleepEndTime = sleepEndTime;
       if (fcmToken) reminder.fcmToken = fcmToken;
-      if (activityLevel !== undefined) {
-        reminder.activityLevel = normalizeActivityLevel(activityLevel);
-      }
+      if (activityLevel !== undefined) reminder.activityLevel = normalizedActivityLevel;
       if (typeof isActive === "boolean") reminder.isActive = isActive;
       if (typeof sleepMode === "boolean") reminder.sleepMode = sleepMode;
 
       if (pauseDurationMinutes !== undefined) {
-        reminder.pauseDurationMinutes = toValidDuration(
-          pauseDurationMinutes,
-          DEFAULT_PAUSE_DURATION
-        );
+        const parsedPauseDuration = toValidDuration(pauseDurationMinutes);
+        if (!parsedPauseDuration) {
+          return sendBadRequest(
+            res,
+            "pauseDurationMinutes must be a number greater than or equal to 1"
+          );
+        }
+        reminder.pauseDurationMinutes = parsedPauseDuration;
       }
 
       if (typeof isPaused === "boolean") {
-        const duration = toValidDuration(
-          pauseDurationMinutes,
-          reminder.pauseDurationMinutes || DEFAULT_PAUSE_DURATION
-        );
+        const duration =
+          pauseDurationMinutes !== undefined
+            ? toValidDuration(pauseDurationMinutes)
+            : reminder.pauseDurationMinutes;
+
+        if (isPaused && !duration) {
+          return sendBadRequest(
+            res,
+            "pauseDurationMinutes is required when pausing reminders"
+          );
+        }
         applyPauseState(reminder, isPaused, duration);
       }
 
@@ -108,29 +127,53 @@ export const createOrUpdateReminder = async (req, res) => {
       return res.json(reminder);
     }
 
-    const initialPauseDuration = toValidDuration(
-      pauseDurationMinutes,
-      DEFAULT_PAUSE_DURATION
-    );
-    const shouldPause = typeof isPaused === "boolean" ? isPaused : false;
+    if (interval === undefined || startTime === undefined || endTime === undefined) {
+      return sendBadRequest(
+        res,
+        "interval, startTime, and endTime are required to create a reminder"
+      );
+    }
 
-    reminder = await Reminder.create({
+    let initialPauseDuration;
+    if (pauseDurationMinutes !== undefined) {
+      initialPauseDuration = toValidDuration(pauseDurationMinutes);
+      if (!initialPauseDuration) {
+        return sendBadRequest(
+          res,
+          "pauseDurationMinutes must be a number greater than or equal to 1"
+        );
+      }
+    }
+
+    const shouldPause = typeof isPaused === "boolean" ? isPaused : false;
+    if (shouldPause && !initialPauseDuration) {
+      return sendBadRequest(
+        res,
+        "pauseDurationMinutes is required when pausing reminders"
+      );
+    }
+
+    const reminderPayload = {
       userId: req.user.id,
-      interval: interval || DEFAULT_INTERVAL,
-      startTime: startTime || DEFAULT_START_TIME,
-      endTime: endTime || DEFAULT_END_TIME,
-      sleepStartTime: sleepStartTime || DEFAULT_SLEEP_START,
-      sleepEndTime: sleepEndTime || DEFAULT_SLEEP_END,
+      interval,
+      startTime,
+      endTime,
+      sleepStartTime,
+      sleepEndTime,
       fcmToken,
-      activityLevel: normalizeActivityLevel(activityLevel),
-      isActive: typeof isActive === "boolean" ? isActive : true,
+      activityLevel: normalizedActivityLevel,
+      isActive: typeof isActive === "boolean" ? isActive : undefined,
       isPaused: shouldPause,
-      sleepMode: typeof sleepMode === "boolean" ? sleepMode : false,
+      sleepMode: typeof sleepMode === "boolean" ? sleepMode : undefined,
       pauseDurationMinutes: initialPauseDuration,
-      pausedUntil: shouldPause
-        ? getPausedUntilFromDuration(initialPauseDuration)
-        : null,
+      pausedUntil: shouldPause ? getPausedUntilFromDuration(initialPauseDuration) : null,
+    };
+
+    Object.keys(reminderPayload).forEach((key) => {
+      if (reminderPayload[key] === undefined) delete reminderPayload[key];
     });
+
+    reminder = await Reminder.create(reminderPayload);
 
     res.json(reminder);
   } catch (error) {
@@ -149,10 +192,25 @@ export const setReminderPause = async (req, res) => {
       typeof req.body?.isPaused === "boolean"
         ? req.body.isPaused
         : !reminder.isPaused;
-    const duration = toValidDuration(
-      req.body?.pauseDurationMinutes,
-      reminder.pauseDurationMinutes || DEFAULT_PAUSE_DURATION
-    );
+
+    const duration =
+      req.body?.pauseDurationMinutes !== undefined
+        ? toValidDuration(req.body.pauseDurationMinutes)
+        : reminder.pauseDurationMinutes;
+
+    if (req.body?.pauseDurationMinutes !== undefined && !duration) {
+      return sendBadRequest(
+        res,
+        "pauseDurationMinutes must be a number greater than or equal to 1"
+      );
+    }
+
+    if (shouldPause && !duration) {
+      return sendBadRequest(
+        res,
+        "pauseDurationMinutes is required when pausing reminders"
+      );
+    }
 
     applyPauseState(reminder, shouldPause, duration);
     await reminder.save();
@@ -195,25 +253,13 @@ export const saveFcmToken = async (req, res) => {
       return res.status(400).json({ message: "Token is required" });
     }
 
-    const reminder = await Reminder.findOneAndUpdate(
-      { userId: req.user.id },
-      {
-        $set: { fcmToken: token },
-        $setOnInsert: {
-          interval: DEFAULT_INTERVAL,
-          startTime: DEFAULT_START_TIME,
-          endTime: DEFAULT_END_TIME,
-          sleepStartTime: DEFAULT_SLEEP_START,
-          sleepEndTime: DEFAULT_SLEEP_END,
-          activityLevel: DEFAULT_ACTIVITY_LEVEL,
-          isActive: true,
-          isPaused: false,
-          sleepMode: false,
-          pauseDurationMinutes: DEFAULT_PAUSE_DURATION,
-        },
-      },
-      { new: true, upsert: true, runValidators: true }
-    );
+    const reminder = await Reminder.findOne({ userId: req.user.id });
+    if (!reminder) {
+      return res.status(404).json({ message: "Reminder not found" });
+    }
+
+    reminder.fcmToken = token;
+    await reminder.save();
 
     res.json({ message: "Token saved", reminder });
   } catch (error) {

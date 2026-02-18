@@ -3,35 +3,62 @@ export const reminderPaths = {
     post: {
       tags: ["Reminder"],
       summary: "Create or update reminder",
+      description:
+        "Creates a reminder when none exists, otherwise updates the existing reminder. Create requires interval, startTime, and endTime.",
       security: [{ bearerAuth: [] }],
       requestBody: {
         required: true,
         content: {
           "application/json": {
             schema: {
-              type: "object",
-              properties: {
-                interval: { type: "number" },
-                startTime: { type: "string" },
-                endTime: { type: "string" },
-                sleepStartTime: { type: "string", example: "22:00" },
-                sleepEndTime: { type: "string", example: "06:00" },
-                fcmToken: { type: "string" },
-                activityLevel: {
-                  type: "string",
-                  enum: ["Sedentary", "Light", "Moderate", "Active", "Very Active"],
+              oneOf: [
+                {
+                  type: "object",
+                  required: ["interval", "startTime", "endTime"],
+                  properties: {
+                    interval: { type: "number" },
+                    startTime: { type: "string" },
+                    endTime: { type: "string" },
+                    sleepStartTime: { type: "string", example: "22:00" },
+                    sleepEndTime: { type: "string", example: "06:00" },
+                    fcmToken: { type: "string" },
+                    activityLevel: {
+                      type: "string",
+                      enum: ["Sedentary", "Light", "Moderate", "Active", "Very Active"],
+                    },
+                    isActive: { type: "boolean" },
+                    isPaused: { type: "boolean" },
+                    pauseDurationMinutes: { type: "number", minimum: 1, example: 60 },
+                    sleepMode: { type: "boolean" },
+                  },
                 },
-                isActive: { type: "boolean" },
-                isPaused: { type: "boolean" },
-                pauseDurationMinutes: { type: "number", example: 60 },
-                sleepMode: { type: "boolean" },
-              },
+                {
+                  type: "object",
+                  properties: {
+                    interval: { type: "number" },
+                    startTime: { type: "string" },
+                    endTime: { type: "string" },
+                    sleepStartTime: { type: "string", example: "22:00" },
+                    sleepEndTime: { type: "string", example: "06:00" },
+                    fcmToken: { type: "string" },
+                    activityLevel: {
+                      type: "string",
+                      enum: ["Sedentary", "Light", "Moderate", "Active", "Very Active"],
+                    },
+                    isActive: { type: "boolean" },
+                    isPaused: { type: "boolean" },
+                    pauseDurationMinutes: { type: "number", minimum: 1, example: 60 },
+                    sleepMode: { type: "boolean" },
+                  },
+                },
+              ],
             },
           },
         },
       },
       responses: {
         200: { description: "Reminder saved" },
+        400: { description: "Validation error" },
       },
     },
   },
@@ -49,6 +76,8 @@ export const reminderPaths = {
     put: {
       tags: ["Reminder"],
       summary: "Pause or resume reminders",
+      description:
+        "If isPaused is omitted, pause state is toggled. pauseDurationMinutes must be >= 1 when provided and is required if pausing without an existing stored duration.",
       security: [{ bearerAuth: [] }],
       requestBody: {
         required: true,
@@ -66,6 +95,7 @@ export const reminderPaths = {
       },
       responses: {
         200: { description: "Reminder pause state updated" },
+        400: { description: "Validation error" },
       },
     },
   },
@@ -83,7 +113,6 @@ export const reminderPaths = {
               properties: {
                 sleepMode: { type: "boolean" },
               },
-              required: ["sleepMode"],
             },
           },
         },
@@ -115,6 +144,7 @@ export const reminderPaths = {
       responses: {
         200: { description: "FCM token saved" },
         400: { description: "Token is required" },
+        404: { description: "Reminder not found" },
       },
     },
   },

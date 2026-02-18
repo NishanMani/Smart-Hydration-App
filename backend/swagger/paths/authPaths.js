@@ -16,16 +16,35 @@ export const authPaths = {
                 weight: { type: "number" },
                 height: { type: "number" },
                 age: { type: "number" },
-                gender: { type: "string" },
-                activityLevel: { type: "string" },
-                climate: { type: "string" },
-                lifestyle: { type: "string" },
-                dailyGoal: { type: "number" },
+                gender: { type: "string", enum: ["male", "female", "other"] },
+                activityLevel: {
+                  type: "string",
+                  enum: ["Sedentary", "Light", "Moderate", "Active", "Very Active"],
+                },
+                climate: { type: "string", enum: ["Moderate", "Hot", "Cold"] },
+                lifestyle: {
+                  type: "string",
+                  enum: ["Athlete", "Office Worker", "Outdoor Worker", "Senior"],
+                },
                 unit: { type: "string", enum: ["ml", "oz"] },
                 pregnant: { type: "boolean" },
                 breastfeeding: { type: "boolean" },
               },
-              required: ["name", "email", "password"],
+              required: [
+                "name",
+                "email",
+                "password",
+                "weight",
+                "height",
+                "age",
+                "gender",
+                "activityLevel",
+                "climate",
+                "lifestyle",
+                "unit",
+                "pregnant",
+                "breastfeeding",
+              ],
             },
           },
         },
@@ -47,7 +66,7 @@ export const authPaths = {
           },
         },
         400: {
-          description: "Email already registered",
+          description: "Validation error or email already registered",
           content: {
             "application/json": {
               schema: {
@@ -55,6 +74,16 @@ export const authPaths = {
                 properties: {
                   success: { type: "boolean", example: false },
                   message: { type: "string", example: "Email already registered" },
+                  errors: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        msg: { type: "string", example: "Weight is required" },
+                        path: { type: "string", example: "weight" },
+                      },
+                    },
+                  },
                 },
               },
             },
