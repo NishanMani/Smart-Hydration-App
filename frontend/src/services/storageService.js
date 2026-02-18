@@ -8,14 +8,28 @@ export const saveToken = async (token) => {
   );
 };
 
+export const saveRefreshToken = async (token) => {
+  await AsyncStorage.setItem(
+    "refreshToken",
+    token
+  );
+};
+
 export const getToken = async () => {
   return await AsyncStorage.getItem(
     "authToken"
   );
 };
 
-export const removeToken = async () => {
-  await AsyncStorage.removeItem(
-    "authToken"
+export const getRefreshToken = async () => {
+  return await AsyncStorage.getItem(
+    "refreshToken"
   );
+};
+
+export const removeToken = async () => {
+  await AsyncStorage.multiRemove([
+    "authToken",
+    "refreshToken",
+  ]);
 };

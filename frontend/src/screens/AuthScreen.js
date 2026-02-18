@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { registerUser, loginUser } from "../api/authApi";
-import { saveToken } from "../services/storageService";
+import { saveToken, saveRefreshToken } from "../services/storageService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPushTokenForBackend } from "../services/notificationService";
 
@@ -69,8 +69,11 @@ export default function AuthScreen() {
     setIsSubmitting(true);
 
     try {
-      const persistSession = async (authUser, token) => {
+      const persistSession = async (authUser, token, refreshToken) => {
         await saveToken(token);
+        if (refreshToken) {
+          await saveRefreshToken(refreshToken);
+        }
 
         const currentUserId = authUser?.id ? String(authUser.id) : null;
         const previousUserId = await AsyncStorage.getItem("currentUserId");
@@ -110,11 +113,13 @@ export default function AuthScreen() {
         });
 
         let token = registerRes?.data?.accessToken;
+        let refreshToken = registerRes?.data?.refreshToken;
         let user = registerRes?.data?.user;
 
         if (!token) {
           const loginRes = await loginUser(payload);
           token = loginRes?.data?.accessToken;
+          refreshToken = loginRes?.data?.refreshToken;
           user = loginRes?.data?.user;
         }
 
@@ -123,7 +128,7 @@ export default function AuthScreen() {
           return;
         }
 
-        const { currentUserId } = await persistSession(user, token);
+        const { currentUserId } = await persistSession(user, token, refreshToken);
         await getPushTokenForBackend().catch(() => null);
         const onboardingKey = currentUserId
           ? `onboardingCompleted:${currentUserId}`
@@ -135,6 +140,7 @@ export default function AuthScreen() {
       } else {
         const res = await loginUser(payload);
         const token = res?.data?.accessToken;
+        const refreshToken = res?.data?.refreshToken;
         const user = res?.data?.user;
 
         if (!token) {
@@ -142,7 +148,7 @@ export default function AuthScreen() {
           return;
         }
 
-        const { currentUserId } = await persistSession(user, token);
+        const { currentUserId } = await persistSession(user, token, refreshToken);
         await getPushTokenForBackend().catch(() => null);
 
         const onboardingKey = currentUserId

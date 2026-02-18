@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,7 +15,11 @@ import { useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getReminder, setReminder } from "../api/reminderApi";
-import { getPushTokenForBackend } from "../services/notificationService";
+import {
+  ensureNotificationPermission,
+  getPushTokenForBackend,
+  syncLocalReminderNotifications,
+} from "../services/notificationService";
 
 export default function ReminderScreen() {
   const navigation = useNavigation();
@@ -33,6 +38,9 @@ export default function ReminderScreen() {
 
   useEffect(() => {
     loadSettings();
+    ensureNotificationPermission().catch((error) => {
+      console.log("[Reminders] Permission request failed on screen load:", error);
+    });
   }, []);
 
   const intervals = ["30 minutes", "1 hour", "1.5 hours", "2 hours", "3 hours"];
@@ -131,6 +139,7 @@ export default function ReminderScreen() {
 
   const saveSettings = async () => {
     try {
+      const savedAt = Date.now();
       const reminderData = {
         enabled,
         paused,
@@ -140,13 +149,25 @@ export default function ReminderScreen() {
         sleepStartTime,
         sleepEndTime,
         activityLevel,
+        updatedAt: savedAt,
       };
 
       await AsyncStorage.setItem("reminderSettings", JSON.stringify(reminderData));
+      Alert.alert("Saved", "Reminder settings saved");
 
-      const fcmToken = await getPushTokenForBackend();
+      let fcmToken = null;
+      if (enabled) {
+        try {
+          fcmToken = await getPushTokenForBackend();
+        } catch (tokenError) {
+          console.log("[Reminders] Token fetch failed during save:", tokenError);
+          fcmToken = null;
+        }
+      }
+      console.log("[Reminders] Save initiated. Notifications enabled:", enabled);
+      console.log("[Reminders] Token fetched for backend:", fcmToken);
 
-      await setReminder({
+      const payload = {
         interval: intervalMap[interval],
         activityLevel,
         isActive: enabled,
@@ -156,11 +177,42 @@ export default function ReminderScreen() {
         sleepStartTime: toHHmm(sleepStartTime),
         sleepEndTime: toHHmm(sleepEndTime),
         ...(fcmToken ? { fcmToken } : {}),
-      }).catch(() => null);
+      };
 
-      Alert.alert("Saved", "Reminder settings saved");
+      try {
+        await syncLocalReminderNotifications({
+          enabled,
+          paused,
+          intervalMinutes: intervalMap[interval],
+          sleepMode,
+          sleepStartTime: toHHmm(sleepStartTime),
+          sleepEndTime: toHHmm(sleepEndTime),
+        });
+        console.log("[Reminders] Local reminder sync completed.");
+      } catch (notificationSyncError) {
+        console.log(
+          "[Reminders] Local reminder sync failed, continuing save:",
+          notificationSyncError
+        );
+      }
+
+      console.log("[Reminders] Sending reminder payload to backend:", payload);
+      try {
+        const response = await setReminder(payload);
+        console.log("[Reminders] Backend reminder response:", response?.data);
+        console.log(
+          "[Reminders] Backend stored token:",
+          response?.data?.fcmToken || null
+        );
+        console.log("[Reminders] Reminder settings sent to backend successfully.");
+      } catch (apiError) {
+        console.log("[Reminders] Backend save failed; local settings are still saved:", apiError);
+      }
+
     } catch (error) {
+      console.log("[Reminders] Failed to save reminder settings:", error);
       console.log(error);
+      Alert.alert("Error", "Unable to save reminder settings right now.");
     }
   };
 
@@ -168,8 +220,16 @@ export default function ReminderScreen() {
     try {
       const res = await getReminder().catch(() => null);
       const serverReminder = res?.data;
+      const localRaw = await AsyncStorage.getItem("reminderSettings");
+      const localReminder = localRaw ? JSON.parse(localRaw) : null;
 
-      if (serverReminder) {
+      const serverUpdatedAt = serverReminder?.updatedAt
+        ? new Date(serverReminder.updatedAt).getTime()
+        : 0;
+      const localUpdatedAt = Number(localReminder?.updatedAt || 0);
+      const shouldUseServer = Boolean(serverReminder) && serverUpdatedAt >= localUpdatedAt;
+
+      if (shouldUseServer) {
         setEnabled(Boolean(serverReminder.isActive));
         setPaused(Boolean(serverReminder.isPaused));
         setPauseDurationMinutes(Number(serverReminder.pauseDurationMinutes || 60));
@@ -183,24 +243,30 @@ export default function ReminderScreen() {
         return;
       }
 
-      const data = await AsyncStorage.getItem("reminderSettings");
-      if (!data) return;
-
-      const parsed = JSON.parse(data);
-      setEnabled(Boolean(parsed.enabled));
-      setPaused(Boolean(parsed.paused));
-      setPauseDurationMinutes(Number(parsed.pauseDurationMinutes || 60));
-      setSleepMode(Boolean(parsed.sleepMode));
-      setReminderInterval(parsed.interval || "30 minutes");
-      setActivityLevel(parsed.activityLevel || "Moderate");
-      setSleepStartTime(new Date(parsed.sleepStartTime || new Date()));
-      setSleepEndTime(new Date(parsed.sleepEndTime || new Date()));
+      if (localReminder) {
+        setEnabled(Boolean(localReminder.enabled));
+        setPaused(Boolean(localReminder.paused));
+        setPauseDurationMinutes(Number(localReminder.pauseDurationMinutes || 60));
+        setSleepMode(Boolean(localReminder.sleepMode));
+        setReminderInterval(localReminder.interval || "30 minutes");
+        setActivityLevel(localReminder.activityLevel || "Moderate");
+        setSleepStartTime(new Date(localReminder.sleepStartTime || new Date()));
+        setSleepEndTime(new Date(localReminder.sleepEndTime || new Date()));
+      }
     } catch (error) {
       console.log(error);
     }
   };
 
   const reminderTimes = generateReminders();
+  
+  const openNotificationSettings = async () => {
+    try {
+      await Linking.openSettings();
+    } catch (error) {
+      Alert.alert("Error", "Unable to open app settings.");
+    }
+  };
 
   const previewText = sleepMode
     ? `You'll receive reminders every ${interval}. Except between ${formatTime(
@@ -232,10 +298,33 @@ export default function ReminderScreen() {
 
           <Switch
             value={enabled}
-            onValueChange={setEnabled}
+            onValueChange={(value) => {
+              setEnabled(value);
+              console.log("[Reminders] Enable reminders toggled:", value);
+              if (value) {
+                ensureNotificationPermission().catch((error) => {
+                  console.log("[Reminders] Permission request failed on toggle:", error);
+                });
+                getPushTokenForBackend()
+                  .then((token) => {
+                    console.log("[Reminders] Token fetched after enabling reminders:", token);
+                  })
+                  .catch((error) => {
+                    console.log("[Reminders] Token fetch failed after enabling reminders:", error);
+                  });
+              }
+            }}
             trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
           />
         </View>
+        
+        <TouchableOpacity
+          style={styles.openSettingsBtn}
+          onPress={openNotificationSettings}
+        >
+          <Ionicons name="settings-outline" size={16} color="#2563eb" />
+          <Text style={styles.openSettingsText}>Open Notification Settings</Text>
+        </TouchableOpacity>
 
         <View style={styles.cardRow}>
           <View style={styles.rowLeft}>
@@ -448,6 +537,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6b7280",
     marginTop: 1,
+  },
+
+  openSettingsBtn: {
+    backgroundColor: "#eff6ff",
+    marginHorizontal: 20,
+    marginBottom: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+  },
+
+  openSettingsText: {
+    color: "#2563eb",
+    fontWeight: "700",
   },
 
   sectionCard: {
