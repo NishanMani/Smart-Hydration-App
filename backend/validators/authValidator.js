@@ -60,7 +60,15 @@ export const registerValidator = [
  
   body("lifestyle")
     .optional()
-    .isIn(["Athlete", "Office Worker", "Outdoor Worker", "Senior"])
+    .isIn([
+      "Standard",
+      "Athlete",
+      "Office Worker",
+      "Outdoor Worker",
+      "Senior",
+      "Senior citizen",
+      "Senior Citizen",
+    ])
     .withMessage("Invalid lifestyle"),
  
   body("unit")

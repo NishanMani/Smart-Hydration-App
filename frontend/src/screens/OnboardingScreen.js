@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -18,14 +19,50 @@ export default function OnboardingScreen() {
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("Male");
-  const [activity, setActivity] = useState("Moderate");
-  const [climate, setClimate] = useState("Moderate");
+  const [activity, setActivity] = useState("");
+  const [climate, setClimate] = useState("");
   const [condition, setCondition] = useState("None");
-  const [lifestyle, setLifestyle] = useState("Standard");
+  const [lifestyle, setLifestyle] = useState("");
   const [unit, setUnit] = useState("ml");
   const navigation = useNavigation();
 
+  const parseNumeric = (value) => Number(String(value).trim());
+
+  const validateStepOne = () => {
+    const parsedWeight = parseNumeric(weight);
+    const parsedHeight = parseNumeric(height);
+    const parsedAge = parseNumeric(age);
+
+    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+      Alert.alert("Invalid Input", "Please enter a valid weight.");
+      return false;
+    }
+
+    if (!Number.isFinite(parsedHeight) || parsedHeight <= 0) {
+      Alert.alert("Invalid Input", "Please enter a valid height.");
+      return false;
+    }
+
+    if (!Number.isFinite(parsedAge) || parsedAge <= 0) {
+      Alert.alert("Invalid Input", "Please enter a valid age.");
+      return false;
+    }
+
+    return true;
+  };
+
   const nextStep = () => {
+    if (step === 1 && !validateStepOne()) {
+      return;
+    }
+    if (step === 2 && !activity) {
+      Alert.alert("Selection Required", "Please choose your activity level.");
+      return;
+    }
+    if (step === 3 && !climate) {
+      Alert.alert("Selection Required", "Please choose your environment.");
+      return;
+    }
     if (step < 4) setStep(step + 1);
   };
 
@@ -48,6 +85,22 @@ export default function OnboardingScreen() {
 };
 
 const handleComplete = async () => {
+  if (!validateStepOne()) {
+    return;
+  }
+  if (!activity) {
+    Alert.alert("Selection Required", "Please choose your activity level.");
+    return;
+  }
+  if (!climate) {
+    Alert.alert("Selection Required", "Please choose your environment.");
+    return;
+  }
+  if (!lifestyle) {
+    Alert.alert("Selection Required", "Please choose your lifestyle profile.");
+    return;
+  }
+
   const goalMl = calculateGoal();
 
   try {

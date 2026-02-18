@@ -1,4 +1,5 @@
 import User from "../models/userModel.js";
+import { calculateHydrationGoal } from "../services/hydrationLogic.js";
 
 export const getUserProfile = async (req, res) => {
   try {
@@ -14,11 +15,56 @@ export const getUserProfile = async (req, res) => {
 
 export const updateUserProfile = async (req, res) => {
   try {
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,      
-      req.body,
-      { new: true, runValidators: true }
-    ).select("-password");
+    const existingUser = await User.findById(req.user.id);
+    if (!existingUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const payload = { ...req.body };
+    const hydrationInputs = [
+      "weight",
+      "height",
+      "age",
+      "gender",
+      "activityLevel",
+      "climate",
+      "lifestyle",
+      "pregnant",
+      "breastfeeding",
+      "unit",
+    ];
+    const shouldRecalculateGoal = hydrationInputs.some(
+      (key) => payload[key] !== undefined
+    );
+
+    if (shouldRecalculateGoal) {
+      const mergedProfile = {
+        weight: payload.weight ?? existingUser.weight,
+        height: payload.height ?? existingUser.height,
+        age: payload.age ?? existingUser.age,
+        gender: payload.gender ?? existingUser.gender,
+        activityLevel: payload.activityLevel ?? existingUser.activityLevel,
+        climate: payload.climate ?? existingUser.climate,
+        lifestyle: payload.lifestyle ?? existingUser.lifestyle,
+        pregnant:
+          payload.pregnant !== undefined
+            ? payload.pregnant
+            : existingUser.pregnant,
+        breastfeeding:
+          payload.breastfeeding !== undefined
+            ? payload.breastfeeding
+            : existingUser.breastfeeding,
+        unit: payload.unit ?? existingUser.unit ?? "ml",
+      };
+
+      const computedGoal = calculateHydrationGoal(mergedProfile);
+      payload.dailyGoal = String(computedGoal);
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(req.user.id, payload, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
 
     if (!updatedUser) {
       return res.status(404).json({ message: "User not found" });
@@ -137,6 +183,4 @@ export const deleteUserHydrationGoal = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };      
-
-
 

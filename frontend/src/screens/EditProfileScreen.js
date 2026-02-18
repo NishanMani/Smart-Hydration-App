@@ -52,6 +52,11 @@ export default function EditProfileScreen() {
   const [lifestyle, setLifestyle] = useState("Standard");
   const [unit, setUnit] = useState("ml");
 
+  const parseNumeric = (value) => Number(String(value).trim());
+  const validateEmail = (value) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+  };
+
   /* LOAD EXISTING DATA */
 
   useEffect(() => {
@@ -127,22 +132,42 @@ export default function EditProfileScreen() {
 
   const saveProfile = async () => {
 
-    if (!name || !email) {
-      Alert.alert("Error", "Name & Email required");
+    if (!name.trim() || !email.trim()) {
+      Alert.alert("Error", "Name and email are required.");
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert("Error", "Please enter a valid email address.");
       return;
     }
 
     try {
-      const parsedWeight = Number(weight);
-      const parsedHeight = Number(height);
-      const parsedAge = Number(age);
+      const parsedWeight = parseNumeric(weight);
+      const parsedHeight = parseNumeric(height);
+      const parsedAge = parseNumeric(age);
+
+      if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+        Alert.alert("Invalid Input", "Please enter a valid weight.");
+        return;
+      }
+
+      if (!Number.isFinite(parsedHeight) || parsedHeight <= 0) {
+        Alert.alert("Invalid Input", "Please enter a valid height.");
+        return;
+      }
+
+      if (!Number.isFinite(parsedAge) || parsedAge <= 0) {
+        Alert.alert("Invalid Input", "Please enter a valid age.");
+        return;
+      }
 
       const profile = {
         name: name.trim(),
-        email: email.trim(),
-        weight: weight.trim() === "" || Number.isNaN(parsedWeight) ? undefined : parsedWeight,
-        height: height.trim() === "" || Number.isNaN(parsedHeight) ? undefined : parsedHeight,
-        age: age.trim() === "" || Number.isNaN(parsedAge) ? undefined : parsedAge,
+        email: email.trim().toLowerCase(),
+        weight: parsedWeight,
+        height: parsedHeight,
+        age: parsedAge,
         gender,
         activityLevel,
         climate,
@@ -250,7 +275,7 @@ export default function EditProfileScreen() {
 
           <TextInput
             value={weight}
-            onChangeText={setWeight}
+            onChangeText={(text) => setWeight(text.replace(/[^0-9.]/g, ""))}
             style={styles.input}
             keyboardType="numeric"
           />
@@ -262,7 +287,7 @@ export default function EditProfileScreen() {
 
           <TextInput
             value={height}
-            onChangeText={setHeight}
+            onChangeText={(text) => setHeight(text.replace(/[^0-9.]/g, ""))}
             style={styles.input}
             keyboardType="numeric"
           />
