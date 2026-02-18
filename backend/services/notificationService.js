@@ -4,7 +4,7 @@ import fs from "fs";
 let isFirebaseReady = false;
 
 try {
-  const keyUrl = new URL("../firebaseServiceKey.json", import.meta.url);
+  const keyUrl = new URL("../config/firebaseServiceKey.json", import.meta.url);
   if (fs.existsSync(keyUrl)) {
     const serviceAccount = JSON.parse(
       fs.readFileSync(keyUrl, "utf8")
@@ -18,7 +18,7 @@ try {
     isFirebaseReady = true;
   } else {
     console.warn(
-      "FCM key not found at backend/firebaseServiceKey.json. Push notifications are disabled."
+      ""
     );
   }
 } catch (error) {
@@ -38,7 +38,6 @@ export const sendPushNotification = async (token, title, body) => {       //dev 
         body,
       },
     });
-    console.log(notification,title)
     return true;
   } catch (error) {
     console.error("FCM Error:", error.message);

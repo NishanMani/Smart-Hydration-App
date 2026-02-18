@@ -1,5 +1,5 @@
-import jwt from 'jsonwebtoken'
-import User from '../models/userModel.js'
+import jwt from 'jsonwebtoken'   //Create & verify JWT
+import User from '../models/userModel.js'   //Hash & compare passwords
 import bcrypt from "bcryptjs";
 import { calculateHydrationGoal } from "../services/hydrationLogic.js";
 import { generateAccessToken ,generateRefreshToken} from '../utils/token.js'
@@ -11,13 +11,14 @@ export const refreshAccessToken = async (req, res) => {
     return res.status(401).json({
       success: false,
       message: "Refresh token required",
+
     });
   }
 
   try {
     const decoded = jwt.verify(
-      refreshToken,
-      process.env.JWT_REFRESH_TOKEN_SECRET
+      refreshToken,   
+      process.env.JWT_REFRESH_TOKEN_SECRET  
     );
 
     const user = await User.findById(decoded.id);

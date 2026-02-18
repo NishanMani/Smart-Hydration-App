@@ -9,4 +9,10 @@ const components = {
   },
 };
 
-export default components;
+export default components; 
+
+//Components (components.js)
+
+// Stores reusable schemas, like User, Reminder, WaterLog.
+
+// Can also include security schemes like bearer auth.

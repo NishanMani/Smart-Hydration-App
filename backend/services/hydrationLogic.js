@@ -1,17 +1,19 @@
 export const calculateHydrationGoal = (data = {}) => {
-  const {
-    weight = 0,
-    height = 0,
-    age = 0,
-    gender = "",
-    activityLevel = "",
-    climate = "",
-    specialCondition = "",
-    pregnant = false,
-    breastfeeding = false,
-    lifestyle = "",
-    unit = "ml"
-  } = data;
+  const weight = Number(data.weight);
+  const height = Number(data.height);
+  const age = Number(data.age);
+  const gender = String(data.gender || "");
+  const activityLevel = String(data.activityLevel || "");
+  const climate = String(data.climate || "");
+  const specialCondition = String(data.specialCondition || "");
+  const pregnant = data.pregnant === true;
+  const breastfeeding = data.breastfeeding === true;
+  const lifestyle = String(data.lifestyle || "");
+  const unit = String(data.unit || "");
+
+  if (![weight, height, age].every(Number.isFinite)) {
+    throw new Error("Invalid profile data for hydration goal calculation");
+  }
  
   let baseIntake = weight * 35;
  

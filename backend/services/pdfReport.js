@@ -1,3 +1,49 @@
+import mongoose from "mongoose";
+import WaterLog from "../models/waterLog.js";
+
+const toStartOfDay = (value) => {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const toEndOfDay = (value) => {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+};
+
+const parseHistoryRange = (query) => {
+  const now = new Date();
+  const parsedFrom = query?.from ? new Date(query.from) : null;
+  const parsedTo = query?.to ? new Date(query.to) : null;
+
+  const hasValidFrom = parsedFrom && !Number.isNaN(parsedFrom.getTime());
+  const hasValidTo = parsedTo && !Number.isNaN(parsedTo.getTime());
+
+  let start = hasValidFrom ? toStartOfDay(parsedFrom) : toStartOfDay(now);
+  let end = hasValidTo ? toEndOfDay(parsedTo) : toEndOfDay(now);
+
+  if (!hasValidFrom) {
+    start.setDate(start.getDate() - 29);
+  }
+
+  if (start > end) {
+    start = toStartOfDay(end);
+    start.setDate(start.getDate() - 29);
+  }
+
+  return { start, end };
+};
+
+const formatDateKey = (value) => {
+  const date = new Date(value);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const exportHistoryPdf = async (req, res) => {
   try {
     let PDFDocument;
@@ -97,11 +143,9 @@ const exportHistoryPdf = async (req, res) => {
     });
 
     const fileName = `hydration-report-${formatDateKey(new Date())}.pdf`;
-    res.status(200).json({
-      success: true,
-      fileName,
-      base64: pdfBuffer.toString("base64"),
-    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=\"${fileName}\"`);
+    res.status(200).send(pdfBuffer);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

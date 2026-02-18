@@ -10,7 +10,7 @@ const definition = {
   },
   servers: [
     {
-      url: 'http://localhost:5000',
+      url: 'http://localhost:3000',
       description: 'Local server',
     },
   ],

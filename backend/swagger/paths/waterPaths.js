@@ -20,6 +20,8 @@ export const waterPaths = {
       },
       responses: {
         201: { description: "Water log created" },
+        400: { description: "Invalid water amount" },
+        500: { description: "Server error" },
       },
     },
   },
@@ -51,6 +53,9 @@ export const waterPaths = {
       },
       responses: {
         200: { description: "Water log updated" },
+        400: { description: "Invalid water amount" },
+        404: { description: "Log not found" },
+        500: { description: "Server error" },
       },
     },
   },
@@ -69,6 +74,8 @@ export const waterPaths = {
       ],
       responses: {
         200: { description: "Water log deleted" },
+        404: { description: "Log not found" },
+        500: { description: "Server error" },
       },
     },
   },
@@ -78,7 +85,38 @@ export const waterPaths = {
       summary: "Get daily water summary",
       security: [{ bearerAuth: [] }],
       responses: {
-        200: { description: "Daily summary" },
+        200: {
+          description: "Daily summary",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  success: { type: "boolean", example: true },
+                  totalIntake: { type: "number" },
+                  progress: { type: "number" },
+                  remaining: { type: "number" },
+                  date: { type: "string", format: "date-time" },
+                  logs: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        _id: { type: "string" },
+                        userId: { type: "string" },
+                        amount: { type: "number" },
+                        date: { type: "string", format: "date-time" },
+                        createdAt: { type: "string", format: "date-time" },
+                        updatedAt: { type: "string", format: "date-time" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        500: { description: "Server error" },
       },
     },
   },
@@ -134,17 +172,22 @@ export const waterPaths = {
                     },
                   },
                   goalPerDay: { type: "number" },
+                  filters: {
+                    type: "object",
+                    properties: {
+                      from: { type: "string", format: "date-time" },
+                      to: { type: "string", format: "date-time" },
+                    },
+                  },
                   logs: {
                     type: "array",
                     items: {
                       type: "object",
                       properties: {
-                        _id: { type: "string" },
-                        userId: { type: "string" },
+                        id: { type: "string" },
                         amount: { type: "number" },
                         date: { type: "string", format: "date-time" },
-                        createdAt: { type: "string", format: "date-time" },
-                        updatedAt: { type: "string", format: "date-time" },
+                        time: { type: "string", example: "14:30" },
                       },
                     },
                   },
@@ -153,7 +196,7 @@ export const waterPaths = {
                     items: {
                       type: "object",
                       properties: {
-                        _id: { type: "string", example: "2026-02-17" },
+                        date: { type: "string", example: "2026-02-17" },
                         totalIntake: { type: "number" },
                         logsCount: { type: "integer" },
                       },
@@ -162,6 +205,21 @@ export const waterPaths = {
                   insights: {
                     type: "object",
                     properties: {
+                      weeklyPerformance: {
+                        type: "object",
+                        properties: {
+                          avgIntake: { type: "number" },
+                          completionPercent: { type: "number" },
+                        },
+                      },
+                      monthlyComparison: {
+                        type: "object",
+                        properties: {
+                          thisMonthTotal: { type: "number" },
+                          lastMonthTotal: { type: "number" },
+                          percentChange: { type: "number" },
+                        },
+                      },
                       streak: {
                         type: "object",
                         properties: {
@@ -176,6 +234,7 @@ export const waterPaths = {
             },
           },
         },
+        500: { description: "Server error" },
       },
     },
   },
