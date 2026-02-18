@@ -24,6 +24,7 @@ const reminderSchema = new mongoose.Schema(
     },
 
     sleepStartTime: {
+<<<<<<< HEAD
       type: String, // "22:00"
       default: "22:00",
     },
@@ -31,21 +32,25 @@ const reminderSchema = new mongoose.Schema(
     sleepEndTime: {
       type: String, // "06:00"
       default: "06:00",
+=======
+      type: String, 
+    },
+
+    sleepEndTime: {
+      type: String, 
+>>>>>>> origin/main
     },
 
     isActive: {
       type: Boolean,
-      default: true,
     },
 
     isPaused: {
       type: Boolean,
-      default: false,
     },
 
     pauseDurationMinutes: {
       type: Number,
-      default: 60,
     },
 
     pausedUntil: {
@@ -54,7 +59,6 @@ const reminderSchema = new mongoose.Schema(
 
     sleepMode: {
       type: Boolean,
-      default: false,
     },
 
     fcmToken: {
@@ -74,7 +78,6 @@ const reminderSchema = new mongoose.Schema(
         "Active",
         "Very Active",
       ],
-      default: "Moderate",
     },
   },
   { timestamps: true }

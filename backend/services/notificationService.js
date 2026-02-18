@@ -18,7 +18,11 @@ try {
     isFirebaseReady = true;
   } else {
     console.warn(
+<<<<<<< HEAD
       "FCM key not found at backend/config/firebaseServiceKey.json. Push notifications are disabled."
+=======
+      ""
+>>>>>>> origin/main
     );
   }
 } catch (error) {
@@ -85,7 +89,10 @@ export const sendPushNotification = async (token, title, body) => {       //dev 
         body,
       },
     });
+<<<<<<< HEAD
     console.log("[Push] FCM notification sent successfully.");
+=======
+>>>>>>> origin/main
     return true;
   } catch (error) {
     console.error("FCM Error:", error.message);

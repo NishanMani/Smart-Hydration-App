@@ -24,32 +24,38 @@ export const registerValidator = [
     .withMessage("Password must be at least 6 characters"),
  
   body("weight")
-    .optional({ values: "falsy" })
+    .exists({ checkFalsy: true })
+    .withMessage("Weight is required")
     .isFloat({ min: 1 })
     .withMessage("Weight must be a positive number"),
  
   body("height")
-    .optional({ values: "falsy" })
+    .exists({ checkFalsy: true })
+    .withMessage("Height is required")
     .isFloat({ min: 1 })
     .withMessage("Height must be a positive number"),
  
   body("age")
-    .optional({ values: "falsy" })
+    .exists({ checkFalsy: true })
+    .withMessage("Age is required")
     .isInt({ min: 1 })
     .withMessage("Age must be a valid number"),
  
   body("gender")
-    .optional({ values: "falsy" })
+    .exists({ checkFalsy: true })
+    .withMessage("Gender is required")
     .isIn(["male", "female", "other", "Male", "Female", "Other"])
     .withMessage("Gender must be male, female or other"),
  
   body("activityLevel")
-    .optional()
+    .exists({ checkFalsy: true })
+    .withMessage("Activity level is required")
     .isIn(["Sedentary", "Light", "Moderate", "Active", "Very Active"])
     .withMessage("Invalid activity level"),
  
   body("climate")
-    .optional()
+    .exists({ checkFalsy: true })
+    .withMessage("Climate is required")
     .isIn(["Moderate", "Hot", "Cold"])
     .withMessage("Invalid climate type"),
  
@@ -59,6 +65,7 @@ export const registerValidator = [
     .withMessage("Invalid special condition"),
  
   body("lifestyle")
+<<<<<<< HEAD
     .optional()
     .isIn([
       "Standard",
@@ -69,12 +76,30 @@ export const registerValidator = [
       "Senior citizen",
       "Senior Citizen",
     ])
+=======
+    .exists({ checkFalsy: true })
+    .withMessage("Lifestyle is required")
+    .isIn(["Athlete", "Office Worker", "Outdoor Worker", "Senior"])
+>>>>>>> origin/main
     .withMessage("Invalid lifestyle"),
  
   body("unit")
-    .optional()
+    .exists({ checkFalsy: true })
+    .withMessage("Unit is required")
     .isIn(["ml", "oz"])
     .withMessage("Unit must be ml or oz"),
+
+  body("pregnant")
+    .exists()
+    .withMessage("Pregnant field is required")
+    .isBoolean()
+    .withMessage("Pregnant must be true or false"),
+
+  body("breastfeeding")
+    .exists()
+    .withMessage("Breastfeeding field is required")
+    .isBoolean()
+    .withMessage("Breastfeeding must be true or false"),
 ];
  
 export const loginValidator = [

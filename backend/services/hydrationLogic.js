@@ -1,4 +1,5 @@
 export const calculateHydrationGoal = (data = {}) => {
+<<<<<<< HEAD
   const {
     weight = 0,
     height = 0,
@@ -22,6 +23,29 @@ export const calculateHydrationGoal = (data = {}) => {
   if (parsedAge >= 65) baseIntake *= 0.9;
   else if (parsedAge >= 55) baseIntake *= 0.95;
 
+=======
+  const weight = Number(data.weight);
+  const height = Number(data.height);
+  const age = Number(data.age);
+  const gender = String(data.gender || "");
+  const activityLevel = String(data.activityLevel || "");
+  const climate = String(data.climate || "");
+  const specialCondition = String(data.specialCondition || "");
+  const pregnant = data.pregnant === true;
+  const breastfeeding = data.breastfeeding === true;
+  const lifestyle = String(data.lifestyle || "");
+  const unit = String(data.unit || "");
+
+  if (![weight, height, age].every(Number.isFinite)) {
+    throw new Error("Invalid profile data for hydration goal calculation");
+  }
+ 
+  let baseIntake = weight * 35;
+ 
+  if (age >= 65) baseIntake *= 0.9;
+  else if (age >= 55) baseIntake *= 0.95;
+ 
+>>>>>>> origin/main
   if (gender.toLowerCase() === "male") baseIntake *= 1.05;
 
   const heightInMeters = parsedHeight > 0 ? parsedHeight / 100 : 0;
