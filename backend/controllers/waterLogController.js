@@ -50,6 +50,30 @@ const getBadgeFromStreak = (streak) => {
   return "Start Your Journey";
 };
 
+const calculateCurrentStreak = (streakMap, goalPerDay, now = new Date()) => {
+  let streak = 0;
+  const cursor = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+
+  const todayKey = formatDateKey(cursor);
+  if (Number(streakMap[todayKey] || 0) < goalPerDay) {
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+
+  while (true) {
+    const key = formatDateKey(cursor);
+    if (Number(streakMap[key] || 0) >= goalPerDay) {
+      streak += 1;
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+};
+
 const parseHistoryRange = (query) => {
   const now = new Date();
   const parsedFrom = query?.from ? new Date(query.from) : null;
@@ -317,19 +341,7 @@ export const getHistoryInsights = async (req, res) => {
       acc[item._id] = Number(item.totalIntake || 0);
       return acc;
     }, {});
-    let streak = 0;
-    const cursor = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-    );
-    while (true) {
-      const key = formatDateKey(cursor);
-      if (Number(streakMap[key] || 0) >= goalPerDay) {
-        streak += 1;
-        cursor.setDate(cursor.getDate() - 1);
-      } else {
-        break;
-      }
-    }
+    const streak = calculateCurrentStreak(streakMap, goalPerDay, now);
 
     res.status(200).json({
       success: true,

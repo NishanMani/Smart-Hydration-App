@@ -5,7 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert
+  Alert,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,7 +35,6 @@ const LIFESTYLE_OPTIONS = [
 const UNIT_OPTIONS = ["ml", "oz"];
 
 export default function EditProfileScreen() {
-
   const navigation = useNavigation();
 
   /* STATE */
@@ -75,9 +74,27 @@ export default function EditProfileScreen() {
       if (user) {
         setName(user.name || "");
         setEmail(user.email || "");
-        setWeight(user.weight ? String(user.weight) : (parsed?.weight ? String(parsed.weight) : ""));
-        setHeight(user.height ? String(user.height) : (parsed?.height ? String(parsed.height) : ""));
-        setAge(user.age ? String(user.age) : (parsed?.age ? String(parsed.age) : ""));
+        setWeight(
+          user.weight
+            ? String(user.weight)
+            : parsed?.weight
+              ? String(parsed.weight)
+              : ""
+        );
+        setHeight(
+          user.height
+            ? String(user.height)
+            : parsed?.height
+              ? String(parsed.height)
+              : ""
+        );
+        setAge(
+          user.age
+            ? String(user.age)
+            : parsed?.age
+              ? String(parsed.age)
+              : ""
+        );
         setGender(user.gender || "Male");
         setActivityLevel(user.activityLevel || "Moderate");
         setClimate(user.climate || "Moderate");
@@ -111,7 +128,6 @@ export default function EditProfileScreen() {
             ? "Breastfeeding"
             : "None"
       );
-
     } catch (e) {
       console.log(e);
     }
@@ -131,7 +147,6 @@ export default function EditProfileScreen() {
   /* SAVE PROFILE */
 
   const saveProfile = async () => {
-
     if (!name.trim() || !email.trim()) {
       Alert.alert("Error", "Name and email are required.");
       return;
@@ -181,10 +196,7 @@ export default function EditProfileScreen() {
       const updateRes = await updateUserProfile(profile);
       const updatedProfile = updateRes?.data || profile;
 
-      await AsyncStorage.setItem(
-        "userProfile",
-        JSON.stringify(updatedProfile)
-      );
+      await AsyncStorage.setItem("userProfile", JSON.stringify(updatedProfile));
 
       const existingHydration = await AsyncStorage.getItem("hydrationData");
       const parsedHydration = existingHydration ? JSON.parse(existingHydration) : {};
@@ -196,13 +208,9 @@ export default function EditProfileScreen() {
         })
       );
 
-      Alert.alert(
-        "Success",
-        "Profile Updated"
-      );
+      Alert.alert("Success", "Profile Updated");
 
       navigation.goBack();
-
     } catch (e) {
       console.log("Profile update failed", e);
       Alert.alert(
@@ -214,358 +222,404 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-
-        {/* HEADER */}
         <View style={styles.headerRow}>
-
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={22}
-              color="#111"
-            />
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color="#0f172a" />
           </TouchableOpacity>
 
-          <Text style={styles.header}>
-            Edit Profile
-          </Text>
-
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.header}>Edit Profile</Text>
+            <Text style={styles.subHeader}>Keep your hydration plan accurate</Text>
+          </View>
         </View>
 
-        {/* FORM */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Basic Details</Text>
 
-        <View style={styles.card}>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              style={styles.input}
+              placeholder="Enter name"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
 
-          {/* NAME */}
-          <Text style={styles.label}>
-            Name
-          </Text>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              style={styles.input}
+              placeholder="Enter email"
+              placeholderTextColor="#94a3b8"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
 
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            style={styles.input}
-            placeholder="Enter name"
-          />
-
-          {/* EMAIL */}
-          <Text style={styles.label}>
-            Email
-          </Text>
-
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            style={styles.input}
-            placeholder="Enter email"
-            keyboardType="email-address"
-          />
-
-          {/* WEIGHT */}
-          <Text style={styles.label}>
-            Weight (kg)
-          </Text>
-
-          <TextInput
-            value={weight}
-            onChangeText={(text) => setWeight(text.replace(/[^0-9.]/g, ""))}
-            style={styles.input}
-            keyboardType="numeric"
-          />
-
-          {/* HEIGHT */}
-          <Text style={styles.label}>
-            Height (cm)
-          </Text>
-
-          <TextInput
-            value={height}
-            onChangeText={(text) => setHeight(text.replace(/[^0-9.]/g, ""))}
-            style={styles.input}
-            keyboardType="numeric"
-          />
-
-          {/* AGE */}
-          <Text style={styles.label}>
-            Age
-          </Text>
-
-          <TextInput
-            value={age}
-            onChangeText={(text) => setAge(text.replace(/[^0-9]/g, ""))}
-            style={styles.input}
-            keyboardType="numeric"
-            maxLength={3}
-          />
-
-          {/* GENDER */}
-          <Text style={styles.label}>
-            Gender
-          </Text>
-          <View style={styles.optionRow}>
-            {["Male", "Female", "Other"].map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.optionBtn,
-                  gender === item && styles.optionBtnActive,
-                ]}
-                onPress={() => setGender(item)}
-              >
-                <Text
+          <View style={styles.fieldBlockNoMargin}>
+            <Text style={styles.label}>Gender</Text>
+            <View style={styles.optionRow}>
+              {["Male", "Female", "Other"].map((item) => (
+                <TouchableOpacity
+                  key={item}
                   style={[
-                    styles.optionText,
-                    gender === item && styles.optionTextActive,
+                    styles.optionBtn,
+                    gender === item && styles.optionBtnActive,
                   ]}
+                  onPress={() => setGender(item)}
                 >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.optionText,
+                      gender === item && styles.optionTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-
-          {/* ACTIVITY */}
-          <Text style={styles.label}>
-            Activity Level
-          </Text>
-          <View style={styles.optionWrap}>
-            {ACTIVITY_OPTIONS.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.tagBtn,
-                  activityLevel === item && styles.tagBtnActive,
-                ]}
-                onPress={() => setActivityLevel(item)}
-              >
-                <Text
-                  style={[
-                    styles.tagText,
-                    activityLevel === item && styles.tagTextActive,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* CLIMATE */}
-          <Text style={styles.label}>
-            Climate
-          </Text>
-          <View style={styles.optionRow}>
-            {CLIMATE_OPTIONS.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.optionBtn,
-                  climate === item && styles.optionBtnActive,
-                ]}
-                onPress={() => setClimate(item)}
-              >
-                <Text
-                  style={[
-                    styles.optionText,
-                    climate === item && styles.optionTextActive,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* CONDITION */}
-          <Text style={styles.label}>
-            Special Condition
-          </Text>
-          <View style={styles.optionWrap}>
-            {CONDITION_OPTIONS.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.tagBtn,
-                  condition === item && styles.tagBtnActive,
-                ]}
-                onPress={() => setCondition(item)}
-              >
-                <Text
-                  style={[
-                    styles.tagText,
-                    condition === item && styles.tagTextActive,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* LIFESTYLE */}
-          <Text style={styles.label}>
-            Lifestyle
-          </Text>
-          <View style={styles.optionWrap}>
-            {LIFESTYLE_OPTIONS.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.tagBtn,
-                  lifestyle === item && styles.tagBtnActive,
-                ]}
-                onPress={() => setLifestyle(item)}
-              >
-                <Text
-                  style={[
-                    styles.tagText,
-                    lifestyle === item && styles.tagTextActive,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* UNIT */}
-          <Text style={styles.label}>
-            Preferred Unit
-          </Text>
-          <View style={styles.optionRow}>
-            {UNIT_OPTIONS.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.optionBtn,
-                  unit === item && styles.optionBtnActive,
-                ]}
-                onPress={() => setUnit(item)}
-              >
-                <Text
-                  style={[
-                    styles.optionText,
-                    unit === item && styles.optionTextActive,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.goalBox}>
-            <Text style={styles.goalLabel}>
-              Suggested Daily Goal
-            </Text>
-            <Text style={styles.goalValue}>
-              {calculateGoal()} {unit}
-            </Text>
-          </View>
-
         </View>
 
-        {/* SAVE BUTTON */}
-        <TouchableOpacity
-          style={styles.saveBtn}
-          onPress={saveProfile}
-        >
-          <Text style={styles.saveText}>
-            Save Changes
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Body Metrics</Text>
+
+          <View style={styles.inlineFields}>
+            <View style={styles.halfField}>
+              <Text style={styles.label}>Weight (kg)</Text>
+              <TextInput
+                value={weight}
+                onChangeText={(text) => setWeight(text.replace(/[^0-9.]/g, ""))}
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="e.g. 70"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+
+            <View style={styles.halfField}>
+              <Text style={styles.label}>Height (cm)</Text>
+              <TextInput
+                value={height}
+                onChangeText={(text) => setHeight(text.replace(/[^0-9.]/g, ""))}
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="e.g. 170"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+
+          <View style={styles.fieldBlockNoMargin}>
+            <Text style={styles.label}>Age</Text>
+            <TextInput
+              value={age}
+              onChangeText={(text) => setAge(text.replace(/[^0-9]/g, ""))}
+              style={styles.input}
+              keyboardType="numeric"
+              maxLength={3}
+              placeholder="Enter age"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Lifestyle & Preferences</Text>
+
+          <View style={styles.preferenceBlock}>
+            <Text style={styles.label}>Activity Level</Text>
+            <View style={styles.preferenceGrid}>
+              {ACTIVITY_OPTIONS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.tagBtn,
+                    styles.preferenceTagBtn,
+                    activityLevel === item && styles.tagBtnActive,
+                  ]}
+                  onPress={() => setActivityLevel(item)}
+                >
+                  <Text
+                    style={[
+                      styles.tagText,
+                      activityLevel === item && styles.tagTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.preferenceBlock}>
+            <Text style={styles.label}>Climate</Text>
+            <View style={styles.optionRow}>
+              {CLIMATE_OPTIONS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.optionBtn,
+                    climate === item && styles.optionBtnActive,
+                  ]}
+                  onPress={() => setClimate(item)}
+                >
+                  <Text
+                    style={[
+                      styles.optionText,
+                      climate === item && styles.optionTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.preferenceBlock}>
+            <Text style={styles.label}>Special Condition</Text>
+            <View style={styles.optionWrap}>
+              {CONDITION_OPTIONS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.tagBtn,
+                    condition === item && styles.tagBtnActive,
+                  ]}
+                  onPress={() => setCondition(item)}
+                >
+                  <Text
+                    style={[
+                      styles.tagText,
+                      condition === item && styles.tagTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.preferenceBlock}>
+            <Text style={styles.label}>Lifestyle</Text>
+            <View style={styles.preferenceGrid}>
+              {LIFESTYLE_OPTIONS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.tagBtn,
+                    styles.preferenceTagBtn,
+                    lifestyle === item && styles.tagBtnActive,
+                  ]}
+                  onPress={() => setLifestyle(item)}
+                >
+                  <Text
+                    style={[
+                      styles.tagText,
+                      lifestyle === item && styles.tagTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.preferenceBlockLast}>
+            <Text style={styles.label}>Preferred Unit</Text>
+            <View style={styles.optionRow}>
+              {UNIT_OPTIONS.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.optionBtn,
+                    unit === item && styles.optionBtnActive,
+                  ]}
+                  onPress={() => setUnit(item)}
+                >
+                  <Text
+                    style={[
+                      styles.optionText,
+                      unit === item && styles.optionTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.goalBox}>
+          <Text style={styles.goalLabel}>Suggested Daily Goal</Text>
+          <Text style={styles.goalValue}>
+            {calculateGoal()} {unit}
           </Text>
+        </View>
+
+        <TouchableOpacity style={styles.saveBtn} onPress={saveProfile}>
+          <Text style={styles.saveText}>Save Changes</Text>
         </TouchableOpacity>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-
   safe: {
     flex: 1,
-    backgroundColor: "#e6f0f4",
+    backgroundColor: "#eef4ff",
   },
 
   scroll: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 34,
   },
-
-  /* HEADER */
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+
+  headerTextWrap: {
+    marginLeft: 10,
   },
 
   header: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
-    marginLeft: 10,
-    color: "#111827",
+    color: "#0f172a",
   },
 
-  /* FORM CARD */
+  subHeader: {
+    fontSize: 13,
+    color: "#475569",
+    marginTop: 2,
+  },
 
-  card: {
-    backgroundColor: "#f3f4f6",
-    padding: 18,
-    borderRadius: 18,
+  sectionCard: {
+    backgroundColor: "#ffffff",
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+  },
+
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 12,
+  },
+
+  fieldBlock: {
+    marginBottom: 14,
+  },
+
+  fieldBlockNoMargin: {
+    marginBottom: 0,
+  },
+
+  preferenceBlock: {
+    backgroundColor: "#f8fbff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+
+  preferenceBlockLast: {
+    backgroundColor: "#f8fbff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 12,
+  },
+
+  preferenceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  preferenceTagBtn: {
+    width: "48%",
+    alignItems: "center",
+  },
+
+  inlineFields: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14,
+  },
+
+  halfField: {
+    flex: 1,
   },
 
   label: {
     fontWeight: "600",
-    marginTop: 12,
-    marginBottom: 6,
-    color: "#374151",
+    marginBottom: 7,
+    color: "#334155",
   },
 
   input: {
-    backgroundColor: "#fff",
-    padding: 12,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#dbe5f3",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderRadius: 12,
+    color: "#0f172a",
   },
 
   optionRow: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 8,
   },
 
   optionWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginBottom: 8,
   },
 
   optionBtn: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#f8fafc",
     borderWidth: 1,
     borderColor: "#d1d5db",
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 11,
     alignItems: "center",
   },
 
   optionBtnActive: {
-    backgroundColor: "#3b82f6",
-    borderColor: "#3b82f6",
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
   },
 
   optionText: {
     color: "#1f2937",
-    fontWeight: "500",
+    fontWeight: "600",
   },
 
   optionTextActive: {
@@ -573,7 +627,7 @@ const styles = StyleSheet.create({
   },
 
   tagBtn: {
-    backgroundColor: "#fff",
+    backgroundColor: "#f8fafc",
     borderWidth: 1,
     borderColor: "#d1d5db",
     borderRadius: 999,
@@ -582,13 +636,13 @@ const styles = StyleSheet.create({
   },
 
   tagBtnActive: {
-    backgroundColor: "#3b82f6",
-    borderColor: "#3b82f6",
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
   },
 
   tagText: {
-    color: "#1f2937",
-    fontWeight: "500",
+    color: "#334155",
+    fontWeight: "600",
   },
 
   tagTextActive: {
@@ -596,10 +650,11 @@ const styles = StyleSheet.create({
   },
 
   goalBox: {
-    marginTop: 14,
     backgroundColor: "#dbeafe",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
   },
 
   goalLabel: {
@@ -609,23 +664,22 @@ const styles = StyleSheet.create({
 
   goalValue: {
     color: "#1e3a8a",
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "700",
+    marginTop: 2,
   },
 
-  /* SAVE */
-
   saveBtn: {
-    backgroundColor: "#3b82f6",
-    padding: 16,
-    borderRadius: 18,
+    backgroundColor: "#2563eb",
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: "center",
-    marginTop: 24,
+    marginTop: 16,
   },
 
   saveText: {
     color: "#fff",
     fontWeight: "700",
+    fontSize: 16,
   },
-
 });

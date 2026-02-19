@@ -51,6 +51,30 @@ const getDayOffset = (rangeStart, dateValue) => {
   return Math.floor((dayStart.getTime() - rangeStart.getTime()) / DAY_MS);
 };
 
+const calculateCurrentStreak = (totalsByDay, goalPerDay, today = new Date()) => {
+  let streak = 0;
+  const cursor = new Date(today);
+  cursor.setHours(0, 0, 0, 0);
+
+  // If today's goal is not yet met, evaluate streak from yesterday.
+  const todayKey = cursor.toDateString();
+  if (Number(totalsByDay[todayKey] || 0) < goalPerDay) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  while (true) {
+    const key = cursor.toDateString();
+    if (Number(totalsByDay[key] || 0) >= goalPerDay) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+};
+
 // Weekly analytics
 export const getWeeklyAnalytics = async (req, res) => {
   try {
@@ -115,8 +139,6 @@ export const getMonthlyAnalytics = async (req, res) => {
 export const getStreakAnalytics = async (req, res) => {
   try {
     const today = new Date();
-    let streak = 0;
-
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 30);
     startDate.setHours(0, 0, 0, 0);
@@ -135,16 +157,7 @@ export const getStreakAnalytics = async (req, res) => {
       daysMetGoal[day] += log.amount;
     });
 
-    let current = new Date(today);
-    while (true) {
-      const day = current.toDateString();
-      if (daysMetGoal[day] >= goal) {
-        streak++;
-        current.setDate(current.getDate() - 1);
-      } else {
-        break;
-      }
-    }
+    const streak = calculateCurrentStreak(daysMetGoal, goal, today);
 
     res.json({ streak, goalPerDay: goal });
   } catch (error) {
